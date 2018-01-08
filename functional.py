@@ -1,5 +1,5 @@
 import torch
-from torch import nn.functional as F
+from torch.nn import functional as F
 
 from . import MaskedBatch
 
