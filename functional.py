@@ -90,17 +90,26 @@ def matmul(tensor1, tensor2, out=None):
         if tensor1.mask != tensor2.mask:
             raise ValueError("cannot contract non-matching dimensions")
         data = tensor1.data.unsqueeze(-2) @ tensor2.data.unsqueeze(-1)
-        mask = tensor1.mask[0] # currently makes a Python scalar...
-        axes = ()
+        mask = tensor1.mask[:, 0]
+        dims = ()
     if dim_tensor1 == 2 and dim_tensor2 == 1:
         if tensor1.mask[:, 0] != tensor2.mask:
             raise ValueError("cannot contract non-matching dimensions")
-        data = tensor1.data.unsqueeze(-2) @ tensor2.data.unsqueeze(-1)
-        mask = tensor1.mask[0] # currently makes a Python scalar...
-        axes = ()
-        return torch.mv(tensor1, tensor2)
+        data = tensor1.data @ tensor2.data
+        mask = tensor1.mask[:, :, 0]
+        dims = tensor1.dims[:1]
     elif dim_tensor1 == 1 and dim_tensor2 == 2:
-        return torch.mm(tensor1.unsqueeze(0), tensor2).squeeze_(0)
+        if tensor1.mask != tensor2.mask[:, :, 0]:
+            raise ValueError("cannot contract non-matching dimensions")
+        data = tensor1.data.unsqueeze(-2) @ tensor2.data
+        mask = tensor2.mask[:, 0, :]
+        dims = tensor2.dims[1:]
     elif dim_tensor1 == 2 and dim_tensor2 == 2:
-        return torch.mm(tensor1, tensor2)
-    raise NotImplementedError("matmul not implemented with batches of 3+D tensors")
+        if tensor1.mask[:, 0] != tensor2.mask[:, :, 0]:
+            raise ValueError("cannot contract non-matching dimensions")
+        data = tensor1.data @ tensor2.data
+        mask = tensor1.mask[:, :, 0]
+        dims = tensor1.dims[:1] + tensor2.dims[1:]
+    else:
+        raise NotImplementedError("matmul not implemented with batches of 3+D tensors")
+    return MaskedBatch(data, mask, dims)
