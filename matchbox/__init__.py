@@ -19,15 +19,15 @@ class MaskedBatch(AbstractBatch):
     def fromlist(cls, examples, dims):
         # do some validation
         bs = len(examples)
-        sizes = (max(x.size(d + 1) for x in examples) for d in range(len(dims)))
+        sizes = [max(x.size(d + 1) for x in examples) for d in range(len(dims))]
         data = examples[0].new(bs, *sizes).zero_()
-        mask_sizes = (s if dims[d] else 1 for d, s in enumerate(sizes))
+        mask_sizes = [s if dims[d] else 1 for d, s in enumerate(sizes)]
         mask = examples[0].new(bs, *mask_sizes).zero_()
         for i, x in enumerate(examples):
-            inds = (slice(0, x.size(d + 1)) if b else slice(None)
-                    for d, b in enumerate(dims))
-            data.__setitem__(i, *inds, x)
-            mask.__setitem__(i, *inds, 1)
+            inds = [slice(0, x.size(d + 1)) if b else slice(None)
+                    for d, b in enumerate(dims)]
+            data.__setitem__((i, *inds), x)
+            mask.__setitem__((i, *inds), 1)
         return cls(data, mask, dims)
 
     def __repr__(self):
