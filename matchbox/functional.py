@@ -49,6 +49,7 @@ def softmax(input, dim=None):
     if dims[dim - 1]:
         data = F.softmax(input.data * input.mask, dim) * input.mask
         data = data / data.sum(dim, keepdim=True) * input.mask
+        data[data.ne(data)] = 0 # remove NaNs
         mask = input.mask.narrow(dim, 0, 1)
         dims = dims[:dim - 1] + (False,) + dims[dim:]
     else:
