@@ -26,8 +26,8 @@ class MaskedBatch(AbstractBatch):
         for i, x in enumerate(examples):
             inds = [slice(0, x.size(d + 1)) if b else slice(None)
                     for d, b in enumerate(dims)]
-            data.__setitem__((i, *inds), x)
-            mask.__setitem__((i, *inds), 1)
+            data.__setitem__((slice(i, i + 1), *inds), x)
+            mask.__setitem__((slice(i, i + 1), *inds), 1)
         return cls(data, mask, dims)
 
     def __repr__(self):
