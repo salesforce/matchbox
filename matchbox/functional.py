@@ -90,28 +90,28 @@ def matmul(tensor1, tensor2, out=None):
     if out is not None:
         raise NotImplementedError("matmul with out argument not implemented")
     if dim_tensor1 == 1 and dim_tensor2 == 1:
-        if tensor1.mask != tensor2.mask:
+        if not tensor1.mask.eq(tensor2.mask).all():
             raise ValueError("cannot contract non-matching dimensions")
         data = tensor1.data.unsqueeze(-2) @ tensor2.data.unsqueeze(-1)
-        mask = tensor1.mask[:, 0]
+        mask = tensor1.mask[:, :1]
         dims = ()
     if dim_tensor1 == 2 and dim_tensor2 == 1:
-        if tensor1.mask[:, 0] != tensor2.mask:
+        if not tensor1.mask[:, 0].eq(tensor2.mask).all():
             raise ValueError("cannot contract non-matching dimensions")
         data = tensor1.data @ tensor2.data
-        mask = tensor1.mask[:, :, 0]
+        mask = tensor1.mask[:, :, :1]
         dims = tensor1.dims[:1]
     elif dim_tensor1 == 1 and dim_tensor2 == 2:
-        if tensor1.mask != tensor2.mask[:, :, 0]:
+        if not tensor1.mask.eq(tensor2.mask[:, :, 0]).all():
             raise ValueError("cannot contract non-matching dimensions")
         data = tensor1.data.unsqueeze(-2) @ tensor2.data
-        mask = tensor2.mask[:, 0, :]
+        mask = tensor2.mask[:, :1, :]
         dims = tensor2.dims[1:]
     elif dim_tensor1 == 2 and dim_tensor2 == 2:
-        if tensor1.mask[:, 0] != tensor2.mask[:, :, 0]:
+        if not tensor1.mask[:, 0].eq(tensor2.mask[:, :, 0]).all():
             raise ValueError("cannot contract non-matching dimensions")
         data = tensor1.data @ tensor2.data
-        mask = tensor1.mask[:, :, 0]
+        mask = tensor1.mask[:, :, :1]
         dims = tensor1.dims[:1] + tensor2.dims[1:]
     else:
         raise NotImplementedError("matmul not implemented with batches of 3+D tensors")
