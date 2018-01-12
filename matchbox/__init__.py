@@ -38,6 +38,6 @@ class MaskedBatch(AbstractBatch):
         data = self.data.transpose(dim1, dim2)
         mask = self.mask.transpose(dim1, dim2)
         dims = list(self.dims)
-        dims[dim1], dims[dim2] = dims[dim2], dims[dim1]
+        dims[dim1 - 1], dims[dim2 - 1] = dims[dim2 - 1], dims[dim1 - 1]
         dims = tuple(dims)
         return self.__class__(data, mask, dims)
