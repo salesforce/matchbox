@@ -26,3 +26,15 @@ print(batch)
 
 batch = F.softmax(batch, dim=-1)
 print(batch)
+
+srcs = [Variable(torch.rand(1, random.randint(1, 5), 4))
+            for i in range(3)]
+trgs = [Variable(torch.rand(1, random.randint(1, 5), 4))
+            for i in range(3)]
+src = MaskedBatch.fromlist(srcs, (True, False))
+trg = MaskedBatch.fromlist(trgs, (True, False))
+print(src)
+print(trg)
+
+res = F.matmul(src, trg.transpose(1, 2))
+print(res)

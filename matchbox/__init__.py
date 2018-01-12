@@ -33,3 +33,11 @@ class MaskedBatch(AbstractBatch):
     def __repr__(self):
         return "MaskedBatch with:\n data: {}\n mask: {}".format(
             repr(self.data), repr(self.mask))
+
+    def transpose(self, dim1, dim2):
+        data = self.data.transpose(dim1, dim2)
+        mask = self.mask.transpose(dim1, dim2)
+        dims = list(self.dims)
+        dims[dim1], dims[dim2] = dims[dim2], dims[dim1]
+        dims = tuple(dims)
+        return self.__class__(data, mask, dims)
