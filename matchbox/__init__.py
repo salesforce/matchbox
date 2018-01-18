@@ -31,8 +31,8 @@ class MaskedBatch(AbstractBatch):
         return cls(data, mask, dims)
 
     def __repr__(self):
-        return "MaskedBatch with:\n data: {}\n mask: {}".format(
-            repr(self.data), repr(self.mask))
+        return "MaskedBatch {} with:\n data: {}\n mask: {}".format(
+            repr(self.dims), repr(self.data), repr(self.mask))
 
     def transpose(self, dim1, dim2):
         data = self.data.transpose(dim1, dim2)
@@ -41,3 +41,11 @@ class MaskedBatch(AbstractBatch):
         dims[dim1 - 1], dims[dim2 - 1] = dims[dim2 - 1], dims[dim1 - 1]
         dims = tuple(dims)
         return self.__class__(data, mask, dims)
+
+if torch.__version__ < '0.4':
+    def var_new(self, *args, **kwargs):
+        n = self.data.new(*args, **kwargs)
+        return torch.autograd.Variable(n)
+    torch.autograd.Variable.new = var_new
+
+torch.autograd.Variable.new
