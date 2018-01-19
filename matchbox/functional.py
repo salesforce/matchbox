@@ -167,30 +167,21 @@ def matmul(tensor1, tensor2, out=None):
             mask = tensor1.mask[:, :1]
             dims = ()
         if dim_tensor1 == 2 and dim_tensor2 == 1:
-            if not tensor1.dims[1] and not tensor2.dims[0]:
-                mask = tensor1.mask[:, :, :1]
-            else:
-                if not tensor1.mask[:, 0].eq(tensor2.mask).all():
-                    raise ValueError("cannot contract non-matching dimensions")
-                mask = tensor1.mask[:, :, :1] @ tensor2.mask[:, :1]
+            if (tensor1.dims[1] or tensor2.dims[0]) and not tensor1.mask[:, 0].eq(tensor2.mask).all():
+                raise ValueError("cannot contract non-matching dimensions")
+            mask = tensor1.mask[:, :, :1] @ tensor2.mask[:, :1]
             data = tensor1.data @ tensor2.data
             dims = tensor1.dims[:1]
         elif dim_tensor1 == 1 and dim_tensor2 == 2:
-            if not tensor1.dims[0] and not tensor2.dims[0]:
-                mask = tensor2.mask[:, :1, :]
-            else:
-                if not tensor1.mask.eq(tensor2.mask[:, :, 0]).all():
-                    raise ValueError("cannot contract non-matching dimensions")
-                mask = tensor1.mask[:, :1].unsqueeze(-2) @ tensor2.mask[:, :1, :]
+            if (tensor1.dims[0] or tensor2.dims[0]) and not tensor1.mask.eq(tensor2.mask[:, :, 0]).all():
+                raise ValueError("cannot contract non-matching dimensions")
+            mask = tensor1.mask[:, :1].unsqueeze(-2) @ tensor2.mask[:, :1, :]
             data = tensor1.data.unsqueeze(-2) @ tensor2.data
             dims = tensor2.dims[1:]
         elif dim_tensor1 == 2 and dim_tensor2 == 2:
-            if not tensor1.dims[1] and not tensor2.dims[0]:
-                mask = tensor1.mask[:, :, :1]
-            else:
-                if not tensor1.mask[:, 0].eq(tensor2.mask[:, :, 0]).all():
-                    raise ValueError("cannot contract non-matching dimensions")
-                mask = tensor1.mask[:, :, :1] @ tensor2.mask[:, :1, :]
+            if (tensor1.dims[1] or tensor2.dims[0]) and not tensor1.mask[:, 0].eq(tensor2.mask[:, :, 0]).all():
+                raise ValueError("cannot contract non-matching dimensions")
+            mask = tensor1.mask[:, :, :1] @ tensor2.mask[:, :1, :]
             data = tensor1.data @ tensor2.data
             dims = tensor1.dims[:1] + tensor2.dims[1:]
         else:
