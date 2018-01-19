@@ -34,6 +34,11 @@ class MaskedBatch(AbstractBatch):
         return "MaskedBatch {} with:\n data: {}\n mask: {}".format(
             repr(self.dims), repr(self.data), repr(self.mask))
 
+    def cuda(self):
+        data = self.data.cuda()
+        mask = self.mask.cuda()
+        return self.__class__(data, mask, self.dims)
+
     def transpose(self, dim1, dim2):
         data = self.data.transpose(dim1, dim2)
         mask = self.mask.transpose(dim1, dim2)
@@ -48,4 +53,8 @@ if torch.__version__ < '0.4':
         return torch.autograd.Variable(n)
     torch.autograd.Variable.new = var_new
 
-torch.autograd.Variable.new
+    def embed_forward(self, input):
+        return torch.nn.functional.embedding(
+            input, self.weight, self.padding_idx, self.max_norm,
+            self.norm_type, self.scale_grad_by_freq, self.sparse)
+    torch.nn.Embedding.forward = embed_forward

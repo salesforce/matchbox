@@ -3,6 +3,8 @@ from torch.autograd import Variable
 from matchbox import MaskedBatch
 from matchbox import functional as F
 
+print(MaskedBatch.__matmul__)
+
 data = Variable(torch.rand(3, 3))
 mask = Variable(torch.Tensor([[1, 1, 1], [1, 0, 0], [1, 1, 0]]))
 x = MaskedBatch(data * mask, mask, (True,))
@@ -36,5 +38,5 @@ trg = MaskedBatch.fromlist(trgs, (True, False))
 print(src)
 print(trg)
 
-res = F.matmul(src, trg.transpose(1, 2))
+res = src @ trg.transpose(1, 2)
 print(res)
