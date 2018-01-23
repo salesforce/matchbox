@@ -230,7 +230,7 @@ def _reduce(fn, zero_preserving=False):
                 raise NotImplementedError(
                     "cannot reduce over dynamic dim with non-zero-preserving kernel")
             if keepdim:
-                mask = batch.mask[(:1 if i == dim else slice(None))]
+                mask = batch.mask[(slice(0, 1) if i == dim else slice(None))]
                 dims = tuple(
                     False if i == dim - 1 else d for i, d in enumerate(input.dims))
             else:
