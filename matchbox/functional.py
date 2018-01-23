@@ -76,7 +76,8 @@ def embedding(input, weight, padding_idx=None, max_norm=None, norm_type=2,
           0.0706 -2.1962 -0.6276
         [torch.FloatTensor of size 1x4x3]
     """
-    data = input.data - input.mask
+    #data = input.data - input.mask
+    data = input.data
     if torch.__version__ < '0.4':
         data = F.embedding(
             data, weight, max_norm, norm_type, scale_grad_by_freq, sparse)
@@ -87,14 +88,6 @@ def embedding(input, weight, padding_idx=None, max_norm=None, norm_type=2,
     data = data * mask
     dims = input.dims + (False,)
     return MaskedBatch(data, mask, dims)
-
-def relu(input, inplace=False):
-    """relu(input, threshold, value, inplace=False) -> Variable
-    Applies the rectified linear unit function element-wise. See
-    :class:`~torch.nn.ReLU` for more details.
-    """
-    data = F.relu(input.data, inplace)
-    return MaskedBatch(data, input.mask, input.dims)
 
 def softmax(input, dim=None):
     r"""Applies a softmax function.
@@ -119,7 +112,7 @@ def softmax(input, dim=None):
     if dims[dim - 1]:
         data = F.softmax(input.data * input.mask, dim) * input.mask
         data = data / data.sum(dim, keepdim=True) * input.mask
-        data[data.ne(data)] = 0 # remove NaNs
+        data[data.ne(data).detach()] = 0 # remove NaNs
         mask = input.mask.narrow(dim, 0, 1)
         dims = dims[:dim - 1] + (False,) + dims[dim:]
     else:
@@ -127,7 +120,7 @@ def softmax(input, dim=None):
         mask = input.mask
     return MaskedBatch(data, mask, dims)
 
-def matmul(tensor1, tensor2, out=None):
+def matmul(batch1, batch2, out=None):
     r"""Matrix product of two tensors.
     Behavior may differ from the below docstring for now...
 
@@ -151,41 +144,105 @@ def matmul(tensor1, tensor2, out=None):
     .. note::
         The 1-dimensional dot product version of this function does not support an :attr:`out` parameter.
     Arguments:
-        tensor1 (Tensor): the first tensor to be multiplied
-        tensor2 (Tensor): the second tensor to be multiplied
-        out (Tensor, optional): the output tensor
+        batch1 (MaskedBatch): the first tensor to be multiplied
+        batch2 (MaskedBatch): the second tensor to be multiplied
     """
-    if isinstance(tensor1, MaskedBatch) and isinstance(tensor2, MaskedBatch):
-        dim_tensor1 = len(tensor1.dims)
-        dim_tensor2 = len(tensor2.dims)
+    if isinstance(batch1, MaskedBatch) and isinstance(batch2, MaskedBatch):
+        dim_batch1 = len(batch1.dims)
+        dim_batch2 = len(batch2.dims)
         if out is not None:
             raise NotImplementedError("matmul with out argument not implemented")
-        if dim_tensor1 == 1 and dim_tensor2 == 1:
-            if (tensor1.dims[0] or tensor2.dims[0]) and not tensor1.mask.eq(tensor2.mask).all():
+        if dim_batch1 == 1 and dim_batch2 == 1:
+            if (batch1.dims[0] or batch2.dims[0]) and not batch1.mask.eq(batch2.mask).all():
                 raise ValueError("cannot contract non-matching dimensions")
-            data = tensor1.data.unsqueeze(-2) @ tensor2.data.unsqueeze(-1)
-            mask = tensor1.mask[:, :1]
+            data = batch1.data.unsqueeze(-2) @ batch2.data.unsqueeze(-1)
+            mask = batch1.mask[:, :1]
             dims = ()
-        if dim_tensor1 == 2 and dim_tensor2 == 1:
-            if (tensor1.dims[1] or tensor2.dims[0]) and not tensor1.mask[:, 0].eq(tensor2.mask).all():
+        if dim_batch1 == 2 and dim_batch2 == 1:
+            if (batch1.dims[1] or batch2.dims[0]) and not batch1.mask[:, 0].eq(batch2.mask).all():
                 raise ValueError("cannot contract non-matching dimensions")
-            mask = tensor1.mask[:, :, :1] @ tensor2.mask[:, :1]
-            data = tensor1.data @ tensor2.data
-            dims = tensor1.dims[:1]
-        elif dim_tensor1 == 1 and dim_tensor2 == 2:
-            if (tensor1.dims[0] or tensor2.dims[0]) and not tensor1.mask.eq(tensor2.mask[:, :, 0]).all():
+            mask = batch1.mask[:, :, :1] @ batch2.mask[:, :1]
+            data = batch1.data @ batch2.data
+            dims = batch1.dims[:1]
+        elif dim_batch1 == 1 and dim_batch2 == 2:
+            if (batch1.dims[0] or batch2.dims[0]) and not batch1.mask.eq(batch2.mask[:, :, 0]).all():
                 raise ValueError("cannot contract non-matching dimensions")
-            mask = tensor1.mask[:, :1].unsqueeze(-2) @ tensor2.mask[:, :1, :]
-            data = tensor1.data.unsqueeze(-2) @ tensor2.data
-            dims = tensor2.dims[1:]
-        elif dim_tensor1 == 2 and dim_tensor2 == 2:
-            if (tensor1.dims[1] or tensor2.dims[0]) and not tensor1.mask[:, 0].eq(tensor2.mask[:, :, 0]).all():
+            mask = batch1.mask[:, :1].unsqueeze(-2) @ batch2.mask[:, :1, :]
+            data = batch1.data.unsqueeze(-2) @ batch2.data
+            dims = batch2.dims[1:]
+        elif dim_batch1 == 2 and dim_batch2 == 2:
+            if (batch1.dims[1] or batch2.dims[0]) and not batch1.mask[:, 0].eq(batch2.mask[:, :, 0]).all():
                 raise ValueError("cannot contract non-matching dimensions")
-            mask = tensor1.mask[:, :, :1] @ tensor2.mask[:, :1, :]
-            data = tensor1.data @ tensor2.data
-            dims = tensor1.dims[:1] + tensor2.dims[1:]
+            mask = batch1.mask[:, :, :1] @ batch2.mask[:, :1, :]
+            data = batch1.data @ batch2.data
+            dims = batch1.dims[:1] + batch2.dims[1:]
         else:
             raise NotImplementedError("matmul not implemented with batches of 3+D tensors")
-        return MaskedBatch(data, mask, dims)
+    else:
+        raise NotImplementedError("matmul not implemented between MaskedBatch and tensor")
+    return MaskedBatch(data, mask, dims)
 
 MaskedBatch.__matmul__ = matmul
+
+def _elementwise(fn, zero_preserving=False):
+    def inner(*batches, **kwargs):
+        if len(batches) == 1:
+            batch = batches[0]
+            data = fn(batch.data, **kwargs)
+            mask = batch.mask
+            dims = batch.dims
+        elif len(batches) == 2:
+            batch1, batch2 = batches
+            if isinstance(batch2, MaskedBatch):
+                data = fn(batch1.data, batch2.data, **kwargs)
+                mask = batch1.mask * batch2.mask
+                dims = tuple(a or b for a, b in zip(batch1.dims, batch2.dims))
+            else:
+                data = fn(batch1.data, batch2, **kwargs)
+                mask = batch1.mask
+                dims = batch1.dims
+        if not zero_preserving:
+            data *= mask
+        return MaskedBatch(data, mask, dims)
+    return inner
+
+MaskedBatch.relu = relu = _elementwise(F.relu, zero_preserving=True)
+MaskedBatch.tanh = tanh = _elementwise(F.tanh, zero_preserving=True)
+MaskedBatch.sigmoid = sigmoid = _elementwise(F.sigmoid)
+MaskedBatch.__add__ = _elementwise(torch.add)
+MaskedBatch.__sub__ = _elementwise(torch.sub)
+MaskedBatch.__mul__ = _elementwise(torch.mul, zero_preserving=True)
+MaskedBatch.__div__ = _elementwise(torch.div, zero_preserving=True)
+
+def _reduce(fn, zero_preserving=False):
+    def inner(batch, dim=None, keepdim=False):
+        if dim is None:
+            if not zero_preserving and any(batch.dims):
+                raise NotImplementedError(
+                    "cannot reduce to scalar with non-zero-preserving kernel "
+                    "if dynamic dims present")
+            mask = batch.mask[(slice(None), *(0 for d in input.dims))]
+            dims = ()
+        else:
+            if dim < 0:
+                dim = input.data.dim() + dim
+            if not zero_preserving and batch.dims[dim - 1]:
+                raise NotImplementedError(
+                    "cannot reduce over dynamic dim with non-zero-preserving kernel")
+            if keepdim:
+                mask = batch.mask[(:1 if i == dim else slice(None))]
+                dims = tuple(
+                    False if i == dim - 1 else d for i, d in enumerate(input.dims))
+            else:
+                mask = batch.mask[(0 if i == dim else slice(None))]
+                dims = tuple(d for i, d in enumerate(input.dims) if i != dim - 1)
+        data = fn(batch.data, dim=dim, keepdim=keepdim)
+        return MaskedBatch(data, mask, dims)
+    return inner
+
+MaskedBatch.sum = _reduce(torch.sum, zero_preserving=True)
+MaskedBatch.mean = _reduce(torch.mean)
+MaskedBatch.std = _reduce(torch.std)
+
+import sys
+torch.nn.functional = sys.modules[__name__] # monkeys in the bamboo tree
