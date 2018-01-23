@@ -246,3 +246,7 @@ MaskedBatch.std = _reduce(torch.std)
 
 import sys
 torch.nn.functional = sys.modules[__name__] # monkeys in the bamboo tree
+import torch.nn.modules.sparse
+torch.nn.modules.sparse.F = sys.modules[__name__]
+import torch.nn.modules.linear
+torch.nn.modules.linear.F = sys.modules[__name__]
