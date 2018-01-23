@@ -210,7 +210,7 @@ MaskedBatch.relu = relu = _elementwise(F.relu, zero_preserving=True)
 MaskedBatch.tanh = tanh = _elementwise(F.tanh, zero_preserving=True)
 MaskedBatch.sigmoid = sigmoid = _elementwise(F.sigmoid)
 MaskedBatch.__add__ = _elementwise(torch.add)
-MaskedBatch.__sub__ = _elementwise(torch.sub)
+MaskedBatch.__sub__ = _elementwise(lambda a, b: a - b)
 MaskedBatch.__mul__ = _elementwise(torch.mul, zero_preserving=True)
 MaskedBatch.__div__ = _elementwise(torch.div, zero_preserving=True)
 
