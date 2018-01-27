@@ -14,7 +14,7 @@ def simple_if(x):
 def rnn(x, h0, cell):
     h = h0
     for xt in x.unbind(1):
-        h = cell(x, h)
+        h = cell(xt, h)
     return h
 
 # si_ast = astor.code_to_ast(simple_if)
@@ -24,6 +24,10 @@ rnn_ast = gast.ast_to_gast(astor.code_to_ast(rnn))
 print(astor.dump_tree(rnn_ast))
 print(astor.to_source(gast.gast_to_ast(rnn_ast)))
 
+import random, string
+def gensym():
+    return '_' + ''.join(random.choice(string.ascii_lowercase) for _ in range(10))
+
 class LambdaLift(TreeTransformer):
     def generic_visit(self, node):
         super().generic_visit(node)
@@ -32,12 +36,13 @@ class LambdaLift(TreeTransformer):
     def visit_For(self, node):
         super().generic_visit(node)
         #print('for:', astor.dump_tree(node))
+        fn_name = gensym()
         self.prepend(gast.Assign([
-            gast.Name('gensym', gast.Store(), None)],
+            gast.Name('_', gast.Store(), None)],
             gast.Call(gast.Name('_for', gast.Load(), None),
-                [gast.Name('gensym', gast.Load(), None)], [])))
+                [gast.Name(fn_name, gast.Load(), None), node.iter], [])))
         self.prepend(gast.FunctionDef(
-            'gensym', gast.arguments([], None, [], [], None, []),
+            fn_name, gast.arguments([node.target], None, [], [], None, []),
             node.body, [], None))
         return None
 

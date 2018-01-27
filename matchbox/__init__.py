@@ -10,7 +10,8 @@ class MaskedBatch(AbstractBatch):
 
     def __init__(self, data, mask, dims):
         if data.dim() != mask.dim() or mask.dim() != len(dims) + 1:
-            raise ValueError("malformed batch object")
+            raise ValueError("malformed MaskedBatch {} with:\n data: {}\n mask: {}".format(
+                repr(dims), repr(data), repr(mask)))
         if isinstance(mask, torch.autograd.Variable) and mask.requires_grad:
             raise ValueError("mask cannot require grad")
         self.data = data

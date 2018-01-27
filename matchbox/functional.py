@@ -89,7 +89,7 @@ def embedding(input, weight, padding_idx=None, max_norm=None, norm_type=2,
     dims = input.dims + (False,)
     return MaskedBatch(data, mask, dims)
 
-def softmax(input, dim=None):
+def softmax(input, dim=-1):
     r"""Applies a softmax function.
     Softmax is defined as:
     :math:`softmax(x) = \frac{exp(x_i)}{\sum_j exp(x_j)}`
@@ -244,9 +244,41 @@ MaskedBatch.sum = _reduce(torch.sum, zero_preserving=True)
 MaskedBatch.mean = _reduce(torch.mean)
 MaskedBatch.std = _reduce(torch.std)
 
+def getitem(batch, index):
+    if not isinstance(index, tuple) or index[0] != slice(None):
+        raise ValueError("first index must be :")
+    data = batch.data[index]
+    mask = batch.mask[tuple(i if b else 0 if isinstance(i, int) else slice(None)
+                       for i, b in zip(index, (True,) + batch.dims))]
+    dims = tuple(b for i, b in zip(index[1:] + (slice(None),) * len(batch.dims), batch.dims)
+                 if not isinstance(i, int)) # could be faster
+    return MaskedBatch(data, mask, dims)
+
+MaskedBatch.__getitem__ = getitem
+
+def unbind(batch, dim):
+    if dim == 0:
+        raise ValueError("cannot unbind over batch dimension")
+    dims = tuple(b for d, b in enumerate(batch.dims) if d != dim - 1)
+    if batch.dims[dim - 1]:
+        for data, mask in zip(torch.unbind(batch.data, dim), torch.unbind(batch.mask, dim)):
+            yield MaskedBatch(data, mask, dims)
+    else:
+        mask = batch.mask.squeeze(dim)
+        for data in torch.unbind(batch.data, dim):
+            yield MaskedBatch(data, mask, dims)
+
+#MaskedBatch.unbind = unbind
+
+# def _for(closure, iterator):
+#     for i in iterator:
+#         closure(i)
+
 import sys
 torch.nn.functional = sys.modules[__name__] # monkeys in the bamboo tree
 import torch.nn.modules.sparse
 torch.nn.modules.sparse.F = sys.modules[__name__]
 import torch.nn.modules.linear
 torch.nn.modules.linear.F = sys.modules[__name__]
+import torch.nn._functions.rnn
+torch.nn._functions.rnn.F = sys.modules[__name__]

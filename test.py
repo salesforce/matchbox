@@ -2,8 +2,7 @@ import torch
 from torch.autograd import Variable
 from matchbox import MaskedBatch
 from matchbox import functional as F
-
-print(MaskedBatch.__matmul__)
+from torch import nn
 
 data = Variable(torch.rand(3, 3))
 mask = Variable(torch.Tensor([[1, 1, 1], [1, 0, 0], [1, 1, 0]]))
@@ -40,3 +39,24 @@ print(trg)
 
 res = src @ trg.transpose(1, 2)
 print(res)
+
+res = res[:, 0]
+print(res)
+
+def rnn(x, h0, cell):
+    h = h0
+    for xt in F.unbind(x, 1):
+        h = cell(xt, h)
+    return h
+
+b, t, ci, co = 4, 3, 2, 2
+cell = nn.RNNCell(ci, co)
+h0 = MaskedBatch(Variable(torch.rand(b, co)),
+                 Variable(torch.FloatTensor([[1]])), (False,))
+x = MaskedBatch.fromlist([Variable(torch.rand(1, random.randint(1, t), ci))
+                          for i in range(b)], (True, False))
+print(h0)
+print(x)
+
+h = rnn(x, h0, cell)
+print(h)
