@@ -184,35 +184,48 @@ def matmul(batch1, batch2, out=None):
 
 MaskedBatch.__matmul__ = matmul
 
-def _elementwise(fn, zero_preserving=False):
-    def inner(*batches, **kwargs):
-        if len(batches) == 1:
-            batch = batches[0]
-            data = fn(batch.data, **kwargs)
-            mask = batch.mask
-            dims = batch.dims
-        elif len(batches) == 2:
-            batch1, batch2 = batches
-            if isinstance(batch2, MaskedBatch):
-                data = fn(batch1.data, batch2.data, **kwargs)
-                mask = batch1.mask * batch2.mask
-                dims = tuple(a or b for a, b in zip(batch1.dims, batch2.dims))
-            else:
-                data = fn(batch1.data, batch2, **kwargs)
-                mask = batch1.mask
-                dims = batch1.dims
+def _elementwise_unary(fn, zero_preserving=False):
+    def inner(batch, **kwargs):
+        data = fn(batch.data, **kwargs)
+        mask = batch.mask
+        dims = batch.dims
         if not zero_preserving:
             data *= mask
         return MaskedBatch(data, mask, dims)
     return inner
 
-MaskedBatch.relu = relu = _elementwise(F.relu, zero_preserving=True)
-MaskedBatch.tanh = tanh = _elementwise(F.tanh, zero_preserving=True)
-MaskedBatch.sigmoid = sigmoid = _elementwise(F.sigmoid)
-MaskedBatch.__add__ = _elementwise(torch.add)
-MaskedBatch.__sub__ = _elementwise(lambda a, b: a - b)
-MaskedBatch.__mul__ = _elementwise(torch.mul, zero_preserving=True)
-MaskedBatch.__div__ = _elementwise(torch.div, zero_preserving=True)
+def _elementwise_binary(fn, identity):
+    def inner(batch1, batch2, **kwargs):
+        if isinstance(batch2, MaskedBatch):
+            if identity is None:
+                raise ValueError("binary elementwise operations require an identity")
+            data1, imask1 = batch1.data, 1 - batch1.mask
+            data2, imask2 = batch2.data, 1 - batch2.mask
+            if identity != 0:
+                data1 = data1 + imask1 * identity
+                data2 = data2 + imask2 * identity
+            data = fn(data1, data2, **kwargs)
+            if batch1.dims != batch2.dims:
+                raise NotImplementedError("binary elementwise operations currently "
+                                          "require matching static/dynamic dims")
+            mask = 1 - imask1 * imask2
+            dims = batch1.dims
+        else:
+            data = fn(batch1.data, batch2, **kwargs)
+            mask = batch1.mask
+            dims = batch1.dims
+            if identity != 0:
+                data *= mask
+        return MaskedBatch(data, mask, dims)
+    return inner
+
+MaskedBatch.relu = relu = _elementwise_unary(F.relu, zero_preserving=True)
+MaskedBatch.tanh = tanh = _elementwise_unary(F.tanh, zero_preserving=True)
+MaskedBatch.sigmoid = sigmoid = _elementwise_unary(F.sigmoid)
+MaskedBatch.__add__ = _elementwise_binary(torch.add, identity=0)
+MaskedBatch.__sub__ = _elementwise_binary(lambda a, b: a - b, identity=0)
+MaskedBatch.__mul__ = _elementwise_binary(torch.mul, identity=1)
+MaskedBatch.__div__ = _elementwise_binary(torch.div, identity=1)
 
 def _reduce(fn, zero_preserving=False):
     def inner(batch, dim=None, keepdim=False):
