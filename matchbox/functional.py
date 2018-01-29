@@ -3,6 +3,10 @@ from torch.nn import functional as F
 
 from . import MaskedBatch
 
+def dropout(input, p=0.5, training=False, inplace=False):
+    data = F.dropout(input.data, p, training, inplace)
+    return MaskedBatch(data, input.mask, input.dims)
+
 def linear(input, weight, bias=None):
     """
     Applies a linear transformation to the incoming data: :math:`y = xA^T + b`.
@@ -293,5 +297,8 @@ import torch.nn.modules.sparse
 torch.nn.modules.sparse.F = sys.modules[__name__]
 import torch.nn.modules.linear
 torch.nn.modules.linear.F = sys.modules[__name__]
+import torch.nn.modules.dropout
+torch.nn.modules.dropout.F = sys.modules[__name__]
+
 import torch.nn._functions.rnn
 torch.nn._functions.rnn.F = sys.modules[__name__]
