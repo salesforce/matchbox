@@ -264,6 +264,8 @@ MaskedBatch.std = _reduce(torch.std)
 def getitem(batch, index):
     if not isinstance(index, tuple) or index[0] != slice(None):
         raise ValueError("first index must be :")
+    if None in index:
+        raise NotImplementedError("cannot index with None")
     data = batch.data[index]
     mask = batch.mask[tuple(i if b else 0 if isinstance(i, int) else slice(None)
                        for i, b in zip(index, (True,) + batch.dims))]
@@ -286,6 +288,35 @@ def unbind(batch, dim):
             yield MaskedBatch(data, mask, dims)
 
 #MaskedBatch.unbind = unbind
+
+def size(batch, dim=None):
+    if dim is None:
+        return
+    if dim > 0 and batch.dims[dim - 1]:
+        raise NotImplementedError("cannot get size of dynamic dim")
+    else:
+        return batch.data.size(dim)
+
+MaskedBatch.size = size
+
+def contiguous(batch):
+    return MaskedBatch(batch.data.contiguous(), batch.mask, batch.dims)
+
+MaskedBatch.contiguous = contiguous
+
+def view(batch, *sizes):
+    bs = batch.data.size(0)
+    if sizes[0] not in (1, -1, bs):
+        raise ValueError("first dim in view must be 1, -1, or batch size")
+    sizes = (bs,) + sizes[1:]
+    data = batch.data.view(*sizes)
+    mask_sizes = (bs,) + tuple(batch.data.size(i) if sizes[i] == -1 else 1
+                               for i in range(1, len(args)))
+    mask = batch.mask.view(*mask_sizes)
+    dims = tuple(sizes[i] == -1 for i in range(1, len(args)))
+    return MaskedBatch(data, mask, dims)
+
+MaskedBatch.view = view
 
 # def _for(closure, iterator):
 #     for i in iterator:
