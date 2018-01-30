@@ -309,10 +309,10 @@ def view(batch, *sizes):
     if sizes[0] not in (1, -1, bs):
         raise ValueError("first dim in view must be 1, -1, or batch size")
     sizes = (bs,) + sizes[1:]
-    data = batch.data.view(*sizes)
+    data = batch.data.view(*sizes) # TODO can throw
     mask_sizes = (bs,) + tuple(batch.data.size(i) if sizes[i] == -1 else 1
                                for i in range(1, len(args)))
-    mask = batch.mask.view(*mask_sizes)
+    mask = batch.mask.view(*mask_sizes) # TODO can this throw if data doesn't?
     dims = tuple(sizes[i] == -1 for i in range(1, len(args)))
     return MaskedBatch(data, mask, dims)
 
