@@ -43,6 +43,13 @@ class MaskedBatch(AbstractBatch):
         mask = self.mask.cuda()
         return self.__class__(data, mask, self.dims)
 
+    @property
+    def is_cuda(self):
+        return self.data.is_cuda
+
+    def get_device(self):
+        return self.data.get_device()
+
     def transpose(self, dim1, dim2):
         data = self.data.transpose(dim1, dim2)
         mask = self.mask.transpose(dim1, dim2)
