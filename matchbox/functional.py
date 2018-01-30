@@ -300,7 +300,8 @@ def size(batch, dim=None):
 MaskedBatch.size = size
 
 def contiguous(batch):
-    return MaskedBatch(batch.data.contiguous(), batch.mask, batch.dims)
+    return MaskedBatch(
+        batch.data.contiguous(), batch.mask.contiguous(), batch.dims)
 
 MaskedBatch.contiguous = contiguous
 
