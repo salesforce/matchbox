@@ -84,17 +84,23 @@ def embedding(batch, weight, padding_idx=None, max_norm=None, norm_type=2,
           0.0706 -2.1962 -0.6276
         [torch.FloatTensor of size 1x4x3]
     """
-    if not isinstance(batch, MaskedBatch):
-        return F.embedding(batch, weight, padding_idx, max_norm, norm_type,
+    def compat_embedding(batch, weight, padding_idx, max_norm, norm_type,
+                         scale_grad_by_freq, sparse):
+        if torch.__version__ >= '0.4':
+            return F.embedding(batch, weight, padding_idx, max_norm, norm_type,
+                               scale_grad_by_freq, sparse)
+        if padding_idx is not None:
+            raise ValueError("F.embedding doesn't support padding_idx for torch < 0.4")
+        return F.embedding(batch, weight, max_norm, norm_type,
                            scale_grad_by_freq, sparse)
+
+    if not isinstance(batch, MaskedBatch):
+        return compat_embedding(batch, weight, padding_idx, max_norm, norm_type,
+                                scale_grad_by_freq, sparse)
     #data = batch.data - batch.mask
     data = batch.data
-    if torch.__version__ < '0.4':
-        data = F.embedding(
-            data, weight, max_norm, norm_type, scale_grad_by_freq, sparse)
-    else:
-        data = F.embedding(
-            data, weight, padding_idx, max_norm, norm_type, scale_grad_by_freq, sparse)
+    data = compat_embedding(
+        data, weight, padding_idx, max_norm, norm_type, scale_grad_by_freq, sparse)
     mask = batch.mask.unsqueeze(-1).float()
     data = data * mask
     dims = batch.dims + (False,)
@@ -201,6 +207,8 @@ MaskedBatch.__matmul__ = matmul
 
 def _elementwise_unary(fn, zero_preserving=False):
     def inner(batch, **kwargs):
+        if not isinstance(batch, MaskedBatch):
+            return fn(batch, **kwargs)
         data = fn(batch.data, **kwargs)
         mask = batch.mask
         dims = batch.dims
@@ -211,6 +219,8 @@ def _elementwise_unary(fn, zero_preserving=False):
 
 def _elementwise_binary(fn, identity):
     def inner(batch1, batch2, **kwargs):
+        if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
+            return fn(batch1, batch2, **kwargs)
         if isinstance(batch2, MaskedBatch):
             if identity is None:
                 raise ValueError("binary elementwise operations require an identity")
@@ -345,8 +355,8 @@ def _inject_arith(original, replacement):
 
 from torch.autograd import Variable
 Variable.__add__ = _inject_arith(Variable.__add__, lambda a, b: b + a)
-Variable.__sub__ = _inject_arith(Variable.__add__, lambda a, b: -b + a)
-Variable.__mul__ = _inject_arith(Variable.__add__, lambda a, b: b * a)
+Variable.__sub__ = _inject_arith(Variable.__sub__, lambda a, b: -b + a)
+Variable.__mul__ = _inject_arith(Variable.__mul__, lambda a, b: b * a)
 # TODO
 # Variable.__matmul__ = _inject_arith(Variable.__add__, lambda a, b:)
 # Variable.__truediv__ = _inject_arith(Variable.__add__, lambda a, b:)
