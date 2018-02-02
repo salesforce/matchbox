@@ -51,13 +51,8 @@ class MaskedBatch(object):
     def get_device(self):
         return self.data.get_device()
 
-    def transpose(self, dim1, dim2):
-        data = self.data.transpose(dim1, dim2)
-        mask = self.mask.transpose(dim1, dim2)
-        dims = list(self.dims)
-        dims[dim1 - 1], dims[dim2 - 1] = dims[dim2 - 1], dims[dim1 - 1]
-        dims = tuple(dims)
-        return self.__class__(data, mask, dims)
+    def dim(self):
+        return self.data.dim()
 
 if torch.__version__ < '0.4':
     def var_new(self, *args, **kwargs):

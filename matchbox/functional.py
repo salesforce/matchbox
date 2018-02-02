@@ -342,6 +342,16 @@ def view(batch, *sizes):
 
 MaskedBatch.view = view
 
+def transpose(batch, dim1, dim2):
+    data = batch.data.transpose(dim1, dim2)
+    mask = batch.mask.transpose(dim1, dim2)
+    dims = list(batch.dims)
+    dims[dim1 - 1], dims[dim2 - 1] = dims[dim2 - 1], dims[dim1 - 1]
+    dims = tuple(dims)
+    return batch.__class__(data, mask, dims)
+
+MaskedBatch.transpose = transpose
+
 # def _for(closure, iterator):
 #     for i in iterator:
 #         closure(i)
