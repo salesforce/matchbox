@@ -22,8 +22,8 @@ class FeedForward(nn.Module):
 
     def __init__(self, d_model, d_hidden):
         super().__init__()
-        self.linear1 = Linear(d_model, d_hidden)
-        self.linear2 = Linear(d_hidden, d_model)
+        self.linear1 = nn.Linear(d_model, d_hidden)
+        self.linear2 = nn.Linear(d_hidden, d_model)
 
     def forward(self, x):
         return self.linear2(F.relu(self.linear1(x)))
@@ -75,10 +75,10 @@ class MultiHead(nn.Module):
                 causal=False, diag=False):
         super().__init__()
         self.attention = Attention(d_key, drop_ratio, causal=causal, diag=diag)
-        self.wq = Linear(d_key, d_key)
-        self.wk = Linear(d_key, d_key)
-        self.wv = Linear(d_value, d_value)
-        self.wo = Linear(d_value, d_key)
+        self.wq = nn.Linear(d_key, d_key)
+        self.wk = nn.Linear(d_key, d_key)
+        self.wv = nn.Linear(d_value, d_value)
+        self.wo = nn.Linear(d_value, d_key)
         self.n_heads = n_heads
 
     def forward(self, query, key, value, mask=None, weights=None, beta=0, tau=1):
