@@ -10,10 +10,17 @@ import random
 
 from transformer import LayerNorm
 
+def _mbtest(f, *dimsarr):
+    xsarr, xbarr = [], []
+    for dims in dimsarr:
+        sizes = (1, *(random.randint(1, size) if b else size
+                      for b, size in dims[1:]))
+        xs = [Variable(torch.rand(*sizes)) for i in range(dims[0])]
+        xsarr.append(xs)
+        xbarr.append(MaskedBatch.fromlist(xs, tuple(b for b, d in dims[1:])))
+    ys = [f(*(xs[j] for xs in xsarr)) for j in range(len(xs[0]))]
+    ybs = f(*xbarr).examples()
+    assert all(y.eq(yb).all() for y, yb in zip(ys, ybs))
+
 def test_LayerNorm():
-    b, t, c = 4, 3, 2
-    layernorm = LayerNorm(c)
-    xs = [Variable(torch.rand(1, random.randint(1, t), c)) for i in range(b)]
-    xb = MaskedBatch.fromlist(xs, (True, False))
-    ys = [layernorm(x) for x in xs]
-    assert ys == list(layernorm(xb).examples())
+    _mbtest(LayerNorm(2), (4, (True, 3), (False, 2)))
