@@ -3,11 +3,13 @@ from torch.nn import functional as F
 
 from . import MaskedBatch
 
-def dropout(input, p=0.5, training=False, inplace=False):
-    data = F.dropout(input.data, p, training, inplace)
-    return MaskedBatch(data, input.mask, input.dims)
+def dropout(batch, p=0.5, training=False, inplace=False):
+    if not isinstance(batch, MaskedBatch):
+        return F.dropout(batch, p, training, inplace)
+    data = F.dropout(batch.data, p, training, inplace)
+    return MaskedBatch(data, batch.mask, batch.dims)
 
-def linear(input, weight, bias=None):
+def linear(batch, weight, bias=None):
     """
     Applies a linear transformation to the incoming data: :math:`y = xA^T + b`.
     Shape:
@@ -17,12 +19,14 @@ def linear(input, weight, bias=None):
         - Bias: :math:`(out\_features)`
         - Output: :math:`(N, *, out\_features)`
     """
-    if input.dims[-1]:
+    if not isinstance(batch, MaskedBatch):
+        return F.linear(batch, weight, bias)
+    if batch.dims[-1]:
         raise ValueError("cannot contract static and dynamic dimensions")
-    data = F.linear(input.data, weight, bias)
-    return MaskedBatch(data, input.mask, input.dims)
+    data = F.linear(batch.data, weight, bias)
+    return MaskedBatch(data, batch.mask, batch.dims)
 
-def embedding(input, weight, padding_idx=None, max_norm=None, norm_type=2,
+def embedding(batch, weight, padding_idx=None, max_norm=None, norm_type=2,
               scale_grad_by_freq=False, sparse=False):
     r"""A simple lookup table that looks up embeddings in a fixed dictionary and size.
     This module is often used to retrieve word embeddings using indices.
@@ -80,20 +84,23 @@ def embedding(input, weight, padding_idx=None, max_norm=None, norm_type=2,
           0.0706 -2.1962 -0.6276
         [torch.FloatTensor of size 1x4x3]
     """
-    #data = input.data - input.mask
-    data = input.data
+    if not isinstance(batch, MaskedBatch):
+        return F.embedding(batch, weight, padding_idx, max_norm, norm_type,
+                           scale_grad_by_freq, sparse)
+    #data = batch.data - batch.mask
+    data = batch.data
     if torch.__version__ < '0.4':
         data = F.embedding(
             data, weight, max_norm, norm_type, scale_grad_by_freq, sparse)
     else:
         data = F.embedding(
             data, weight, padding_idx, max_norm, norm_type, scale_grad_by_freq, sparse)
-    mask = input.mask.unsqueeze(-1).float()
+    mask = batch.mask.unsqueeze(-1).float()
     data = data * mask
-    dims = input.dims + (False,)
+    dims = batch.dims + (False,)
     return MaskedBatch(data, mask, dims)
 
-def softmax(input, dim=-1):
+def softmax(batch, dim=-1):
     r"""Applies a softmax function.
     Softmax is defined as:
     :math:`softmax(x) = \frac{exp(x_i)}{\sum_j exp(x_j)}`
@@ -101,27 +108,29 @@ def softmax(input, dim=-1):
     lie in the range `(0, 1)` and sum to 1.
     See :class:`~torch.nn.Softmax` for more details.
     Arguments:
-        input (Variable): input
+        batch (Variable): input
         dim (int): A dimension along which softmax will be computed.
     .. note::
         This function doesn't work directly with NLLLoss,
         which expects the Log to be computed between the Softmax and itself.
         Use log_softmax instead (it's faster and has better numerical properties).
     """
+    if not isinstance(batch, MaskedBatch):
+        return F.softmax(batch, dim)
     if dim == 0:
         raise ValueError("cannot softmax over batch dimension")
     elif dim < 0:
-        dim = input.data.dim() + dim
-    dims = input.dims
+        dim = batch.data.dim() + dim
+    dims = batch.dims
     if dims[dim - 1]:
-        data = F.softmax(input.data * input.mask, dim) * input.mask
-        data = data / data.sum(dim, keepdim=True) * input.mask
+        data = F.softmax(batch.data * batch.mask, dim) * batch.mask
+        data = data / data.sum(dim, keepdim=True) * batch.mask
         data[data.ne(data).detach()] = 0 # remove NaNs
-        mask = input.mask.narrow(dim, 0, 1)
+        mask = batch.mask.narrow(dim, 0, 1)
         dims = dims[:dim - 1] + (False,) + dims[dim:]
     else:
-        data = F.softmax(input.data, dim)
-        mask = input.mask
+        data = F.softmax(batch.data, dim)
+        mask = batch.mask
     return MaskedBatch(data, mask, dims)
 
 def matmul(batch1, batch2, out=None):
@@ -151,6 +160,8 @@ def matmul(batch1, batch2, out=None):
         batch1 (MaskedBatch): the first tensor to be multiplied
         batch2 (MaskedBatch): the second tensor to be multiplied
     """
+    if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
+        return F.matmul(batch1, batch2)
     if isinstance(batch1, MaskedBatch) and isinstance(batch2, MaskedBatch):
         dim_batch1 = len(batch1.dims)
         dim_batch2 = len(batch2.dims)
@@ -205,7 +216,7 @@ def _elementwise_binary(fn, identity):
                 raise ValueError("binary elementwise operations require an identity")
             data1, imask1 = batch1.data, 1 - batch1.mask
             data2, imask2 = batch2.data, 1 - batch2.mask
-            if identity != 0:
+            if identity != 0: # TODO figure out left-identity vs right-identity
                 data1 = data1 + imask1 * identity
                 data2 = data2 + imask2 * identity
             data = fn(data1, data2, **kwargs)
@@ -229,7 +240,7 @@ MaskedBatch.sigmoid = sigmoid = _elementwise_unary(F.sigmoid)
 MaskedBatch.__add__ = _elementwise_binary(torch.add, identity=0)
 MaskedBatch.__sub__ = _elementwise_binary(lambda a, b: a - b, identity=0)
 MaskedBatch.__mul__ = _elementwise_binary(torch.mul, identity=1)
-MaskedBatch.__div__ = _elementwise_binary(torch.div, identity=1)
+MaskedBatch.__truediv__ = _elementwise_binary(torch.div, identity=1)
 
 def _reduce(fn, zero_preserving=False):
     def inner(batch, dim=None, keepdim=False):
@@ -238,21 +249,23 @@ def _reduce(fn, zero_preserving=False):
                 raise NotImplementedError(
                     "cannot reduce to scalar with non-zero-preserving kernel "
                     "if dynamic dims present")
-            mask = batch.mask[(slice(None), *(0 for d in input.dims))]
+            mask = batch.mask[(slice(None), *(0 for d in batch.dims))]
             dims = ()
         else:
             if dim < 0:
-                dim = input.data.dim() + dim
+                dim = batch.data.dim() + dim
             if not zero_preserving and batch.dims[dim - 1]:
                 raise NotImplementedError(
                     "cannot reduce over dynamic dim with non-zero-preserving kernel")
             if keepdim:
-                mask = batch.mask[(slice(0, 1) if i == dim else slice(None))]
+                mask = batch.mask[tuple(slice(0, 1) if i == dim else slice(None)
+                                        for i in range(batch.mask.dim()))]
                 dims = tuple(
-                    False if i == dim - 1 else d for i, d in enumerate(input.dims))
+                    False if i == dim - 1 else d for i, d in enumerate(batch.dims))
             else:
-                mask = batch.mask[(0 if i == dim else slice(None))]
-                dims = tuple(d for i, d in enumerate(input.dims) if i != dim - 1)
+                mask = batch.mask[tuple(0 if i == dim else slice(None)
+                                        for i in range(batch.mask.dim()))]
+                dims = tuple(d for i, d in enumerate(batch.dims) if i != dim - 1)
         data = fn(batch.data, dim=dim, keepdim=keepdim)
         return MaskedBatch(data, mask, dims)
     return inner
@@ -322,6 +335,21 @@ MaskedBatch.view = view
 # def _for(closure, iterator):
 #     for i in iterator:
 #         closure(i)
+
+def _inject_arith(original, replacement):
+    def inner(self, other):
+        if isinstance(other, MaskedBatch):
+            return replacement(self, other)
+        return original(self, other)
+    return inner
+
+from torch.autograd import Variable
+Variable.__add__ = _inject_arith(Variable.__add__, lambda a, b: b + a)
+Variable.__sub__ = _inject_arith(Variable.__add__, lambda a, b: -b + a)
+Variable.__mul__ = _inject_arith(Variable.__add__, lambda a, b: b * a)
+# TODO
+# Variable.__matmul__ = _inject_arith(Variable.__add__, lambda a, b:)
+# Variable.__truediv__ = _inject_arith(Variable.__add__, lambda a, b:)
 
 import sys
 torch.nn.functional = sys.modules[__name__] # monkeys in the bamboo tree
