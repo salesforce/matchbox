@@ -49,6 +49,13 @@ def rnn(x, h0, cell):
         h = cell(xt, h)
     return h
 
+# TODO make this work
+# def rnn(x, h0, cell):
+#     h = [h0]
+#     for xt in F.unbind(x, 1):
+#         h.append(cell(xt, h[-1]))
+#     return h[1:]
+
 b, t, ci, co = 4, 3, 2, 2
 cell = nn.RNNCell(ci, co)
 h0 = MaskedBatch(Variable(torch.rand(b, co)),
