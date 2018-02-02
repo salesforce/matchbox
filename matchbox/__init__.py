@@ -1,12 +1,6 @@
 import torch
 
-class AbstractBatch(object):
-    pass
-
-class VectorBatch(AbstractBatch):
-    pass
-
-class MaskedBatch(AbstractBatch):
+class MaskedBatch(object):
 
     def __init__(self, data, mask, dims):
         if data.dim() != mask.dim() or mask.dim() != len(dims) + 1:
@@ -33,6 +27,13 @@ class MaskedBatch(AbstractBatch):
             data[(slice(i, i + 1), *inds)] = x
             mask[(slice(i, i + 1), *inds)] = 1
         return cls(data, mask, dims)
+
+    def examples(self):
+        data, mask, dims = self.data, self.mask.data.long(), self.dims
+        for i in range(data.size(0)):
+            inds = tuple(slice(0, mask[i].sum(d, keepdim=True)[tuple(0 for _ in dims)])
+                         if b else slice(None) for d, b in enumerate(dims))
+            yield data[(slice(i, i + 1), *inds)]
 
     def __repr__(self):
         return "MaskedBatch {} with:\n data: {}\n mask: {}".format(
