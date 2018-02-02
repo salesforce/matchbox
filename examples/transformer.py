@@ -5,6 +5,8 @@ import matchbox
 from matchbox import functional as F
 from matchbox.data import MaskedBatchField
 
+import math
+
 class LayerNorm(nn.Module):
 
     def __init__(self, d_model, eps=1e-6):
@@ -52,7 +54,7 @@ class Attention(nn.Module):
     def forward(self, query, key, value=None):
         dot_products = query @ key.transpose(1, 2)   # batch x trg_len x trg_len
 
-        if query.dim() == 3 and self.causal and (query.size(1) == key.size(1)):
+        if query.dim() == 3 and self.causal:# and (query.size(1) == key.size(1)):
             tri = key.data.new(key.size(1), key.size(1)).fill_(1).triu(1) * INF
             dot_products.data.sub_(tri.unsqueeze(0)) # TODO
 
