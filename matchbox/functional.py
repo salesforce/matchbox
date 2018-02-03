@@ -1,5 +1,6 @@
 import torch
 from torch.nn import functional as F
+from torch.autograd import Variable
 
 from . import MaskedBatch
 
@@ -10,15 +11,6 @@ def dropout(batch, p=0.5, training=False, inplace=False):
     return MaskedBatch(data, batch.mask, batch.dims)
 
 def linear(batch, weight, bias=None):
-    """
-    Applies a linear transformation to the incoming data: :math:`y = xA^T + b`.
-    Shape:
-        - Input: :math:`(N, *, in\_features)` where `*` means any number of
-          additional dimensions
-        - Weight: :math:`(out\_features, in\_features)`
-        - Bias: :math:`(out\_features)`
-        - Output: :math:`(N, *, out\_features)`
-    """
     if not isinstance(batch, MaskedBatch):
         return F.linear(batch, weight, bias)
     if batch.dims[-1]:
@@ -28,62 +20,6 @@ def linear(batch, weight, bias=None):
 
 def embedding(batch, weight, padding_idx=None, max_norm=None, norm_type=2,
               scale_grad_by_freq=False, sparse=False):
-    r"""A simple lookup table that looks up embeddings in a fixed dictionary and size.
-    This module is often used to retrieve word embeddings using indices.
-    The input to the module is a list of indices, and the embedding matrix,
-    and the output is the corresponding word embeddings.
-    Args:
-        input: tensor, containing indices into the embedding matrix
-        weight:
-            Number of rows should correspond to the maximum possible index + 1,
-            number of columns is the embedding size
-        max_norm (float, optional): If given, will renormalize the embeddings to always have a norm lesser than this
-        norm_type (float, optional): The p of the p-norm to compute for the max_norm option
-        scale_grad_by_freq (boolean, optional): if given, this will scale gradients by the frequency of
-                                                the words in the mini-batch.
-        sparse (boolean, optional): if ``True``, gradient w.r.t. weight matrix will be a sparse tensor. See Notes for
-                                    more details regarding sparse gradients.
-    Shape:
-        - Input: LongTensor `(N, W)`, N = mini-batch, W = number of indices to extract per mini-batch
-        - Embedding_matrix: FloatTensor `(V, embedding_dim)`, V = maximum index + 1, embedding_dim = embedding size
-        - Output: `(N, W, embedding_dim)`
-    Notes:
-        It is advised to only use `sparse=True` if `embedding_matrix` is a leaf Variable,
-        since some autograd functions may not propagate sparse gradients correctly.
-        Additionally, keep in mind that only a limited number of optimizers support
-        sparse gradients: currently it's `optim.SGD` (`cuda` and `cpu`), and `optim.Adagrad` (`cpu`)
-    Examples::
-        >>> # a batch of 2 samples of 4 indices each
-        >>> input = Variable(torch.LongTensor([[1,2,4,5],[4,3,2,9]]))
-        >>> # an embedding matrix containing 10 tensors of size 3
-        >>> embedding_matrix = Variable(torch.rand(10, 3))
-        >>> F.embedding(input, embedding_matrix)
-        Variable containing:
-        (0 ,.,.) =
-         -1.0822  1.2522  0.2434
-          0.8393 -0.6062 -0.3348
-          0.6597  0.0350  0.0837
-          0.5521  0.9447  0.0498
-        (1 ,.,.) =
-          0.6597  0.0350  0.0837
-         -0.1527  0.0877  0.4260
-          0.8393 -0.6062 -0.3348
-         -0.8738 -0.9054  0.4281
-        [torch.FloatTensor of size 2x4x3]
-        >>> # example with padding_idx
-        >>> weights = torch.rand(10, 3)
-        >>> weights[0, :].zero_()
-        >>> embedding_matrix = Variable(weights)
-        >>> input = Variable(torch.LongTensor([[0,2,0,5]]))
-        >>> F.embedding(input, embedding_matrix, padding_idx=0)
-        Variable containing:
-        (0 ,.,.) =
-          0.0000  0.0000  0.0000
-          0.3452  0.4937 -0.9361
-          0.0000  0.0000  0.0000
-          0.0706 -2.1962 -0.6276
-        [torch.FloatTensor of size 1x4x3]
-    """
     def compat_embedding(batch, weight, padding_idx, max_norm, norm_type,
                          scale_grad_by_freq, sparse):
         if torch.__version__ >= '0.4':
@@ -107,20 +43,6 @@ def embedding(batch, weight, padding_idx=None, max_norm=None, norm_type=2,
     return MaskedBatch(data, mask, dims)
 
 def softmax(batch, dim=-1):
-    r"""Applies a softmax function.
-    Softmax is defined as:
-    :math:`softmax(x) = \frac{exp(x_i)}{\sum_j exp(x_j)}`
-    It is applied to all slices along dim, and will rescale them so that the elements
-    lie in the range `(0, 1)` and sum to 1.
-    See :class:`~torch.nn.Softmax` for more details.
-    Arguments:
-        batch (Variable): input
-        dim (int): A dimension along which softmax will be computed.
-    .. note::
-        This function doesn't work directly with NLLLoss,
-        which expects the Log to be computed between the Softmax and itself.
-        Use log_softmax instead (it's faster and has better numerical properties).
-    """
     if not isinstance(batch, MaskedBatch):
         return F.softmax(batch, dim)
     if dim == 0:
@@ -140,32 +62,6 @@ def softmax(batch, dim=-1):
     return MaskedBatch(data, mask, dims)
 
 def matmul(batch1, batch2, out=None):
-    r"""Matrix product of two tensors.
-    Behavior may differ from the below docstring for now...
-
-    The behavior depends on the dimensionality of the tensors as follows:
-    - If both tensors are 1-dimensional, the dot product (scalar) is returned.
-    - If both arguments are 2-dimensional, the matrix-matrix product is returned.
-    - If the first argument is 1-dimensional and the second argument is 2-dimensional,
-      a 1 is prepended to its dimension for the purpose of the matrix multiply.
-      After the matrix multiply, the prepended dimension is removed.
-    - If the first argument is 2-dimensional and the second argument is 1-dimensional,
-      the matrix-vector product is returned.
-    - If both arguments are at least 1-dimensional and at least one argument is
-      N-dimensional (where N > 2), then a batched matrix multiply is returned.  If the first
-      argument is 1-dimensional, a 1 is prepended to its dimension for the purpose of the
-      batched matrix multiply and removed after.  If the second argument is 1-dimensional, a
-      1 is appended to its dimension for the purpose of the batched matrix multiple and removed after.
-      The non-matrix (i.e. batch) dimensions are :ref:`broadcasted <broadcasting-semantics>` (and thus
-      must be broadcastable).  For example, if :attr:`tensor1` is a
-      :math:`(j \times 1 \times n \times m)` tensor and :attr:`tensor2` is a :math:`(k \times m \times p)`
-      tensor, :attr:`out` will be an :math:`(j \times k \times n \times p)` tensor.
-    .. note::
-        The 1-dimensional dot product version of this function does not support an :attr:`out` parameter.
-    Arguments:
-        batch1 (MaskedBatch): the first tensor to be multiplied
-        batch2 (MaskedBatch): the second tensor to be multiplied
-    """
     if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
         return F.matmul(batch1, batch2)
     if isinstance(batch1, MaskedBatch) and isinstance(batch2, MaskedBatch):
@@ -343,6 +239,16 @@ def view(batch, *sizes):
 MaskedBatch.view = view
 
 def transpose(batch, dim1, dim2):
+    if dim1 > batch.dim() or dim2 > batch.dim():
+        if dim1 == -1:
+            dim1 = batch.dim() - 1
+        if dim2 == -1:
+            dim2 = batch.dim() - 1
+        permutation = [dim2 if i == dim1 else dim1 if i == dim2 else i
+                       for i in range(batch.dim() + 1)][:batch.dim()]
+        return batch.permute(*permutation)
+    if not isinstance(batch, MaskedBatch):
+        return torch.transpose(batch, dim1, dim2)
     data = batch.data.transpose(dim1, dim2)
     mask = batch.mask.transpose(dim1, dim2)
     dims = list(batch.dims)
@@ -351,6 +257,68 @@ def transpose(batch, dim1, dim2):
     return batch.__class__(data, mask, dims)
 
 MaskedBatch.transpose = transpose
+Variable.transpose = transpose
+
+def permute(batch, *permutation):
+    data = batch.data.permute(*permutation)
+    mask = batch.mask.permute(*permutation)
+    dims = tuple(batch.dims[i] for i in permutation)
+    return MaskedBatch(data, mask, dims)
+
+MaskedBatch.permute = permute
+
+def split_dim(batch, dim, split_by):
+    if dim == -1:
+        dim = batch.dim() - 1
+    if batch.data.size(dim) % split_by != 0:
+        raise ValueError("size of dim not divisible by split_by")
+    sizes = ((s // split_by, split_by) if d == dim else (s,)
+             for d, s in enumerate(batch.data.size()))
+    if not isinstance(batch, MaskedBatch):
+        return batch.contiguous().view(*(n for tup in sizes for n in tup))
+    if batch.dims[dim - 1]:
+        raise ValueError("cannot split dynamic dimension")
+    data = batch.data.contiguous().view(*(n for tup in sizes for n in tup))
+    if dim == 0:
+        sizes = ((s // split_by, split_by) if d == dim else (s,)
+                 for d, s in enumerate(batch.mask.size()))
+        mask = batch.mask.contiguous().view(*sizes)
+    else:
+        mask = batch.mask.unsqueeze(dim)
+    dims = batch.dims[:dim] + (False,) + batch.dims[dim:]
+    return MaskedBatch(data, mask, dims)
+
+MaskedBatch.split_dim = split_dim
+Variable.split_dim = split_dim
+
+def combine_dims(batch, dim1, dim2):
+    if dim1 == -1:
+        dim1 = batch.dim() - 1
+    if dim2 == -1:
+        dim2 = batch.dim() - 1
+    if dim2 != dim1 + 1:
+        permutation = list(range(batch.dims()))
+        permutation = permutation[:dim1 + 1] + [dim2] + permutation[dim1 + 1:dim2] + permutation[dim2 + 1:]
+        batch = batch.permute(*(dim))err
+        batch = batch.transpose(dim1 + 1, dim2)
+    if not isinstance(batch, MaskedBatch):
+        sizes = (batch.size(d + 1) * s if d == dim1 else s
+                 for d, s in enumerate(batch.size()) if d != dim1 + 1)
+        return batch.contiguous().view(*sizes)
+    sizes = (batch.data.size(d + 1) * s if d == dim1 else s
+             for d, s in enumerate(batch.data.size()) if d != dim1 + 1)
+    data = batch.data.contiguous().view(*sizes)
+    if dim1 == 0:
+        sizes = (batch.mask.size(d + 1) * s if d == dim1 else s
+                 for d, s in enumerate(batch.mask.size()) if d != dim1 + 1)
+        mask = batch.mask.contiguous().view(*sizes)
+    else:
+        mask = batch.mask.squeeze(dim1 + 1)
+    dims = batch.dims[:dim1] + batch.dims[dim1 + 1:]
+    return MaskedBatch(data, mask, dims)
+
+MaskedBatch.combine_dims = combine_dims
+Variable.combine_dims = combine_dims
 
 # def _for(closure, iterator):
 #     for i in iterator:
@@ -363,7 +331,6 @@ def _inject_arith(original, replacement):
         return original(self, other)
     return inner
 
-from torch.autograd import Variable
 Variable.__add__ = _inject_arith(Variable.__add__, lambda a, b: b + a)
 Variable.__sub__ = _inject_arith(Variable.__sub__, lambda a, b: -b + a)
 Variable.__mul__ = _inject_arith(Variable.__mul__, lambda a, b: b * a)
