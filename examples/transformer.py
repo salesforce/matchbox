@@ -83,16 +83,17 @@ class MultiHead(nn.Module):
         self.wo = nn.Linear(d_value, d_key)
         self.n_heads = n_heads
 
-    def forward(self, query, key, value, mask=None, weights=None, beta=0, tau=1):
+    def forward(self, query, key, value):
         query, key, value = self.wq(query), self.wk(key), self.wv(value)  # B x T x D
-        B, D = query.size(0), query.size(2)
         N = self.n_heads
 
-        query, key, value = (x.contiguous().view(B, -1, N, D//N).transpose(2, 1).contiguous().view(B*N, -1, D//N)
-                                for x in (query, key, value))
+        query, key, value = (x.split_dim(-1, N).combine_dims(0, -1) for x in (query, key, value))
+
+        #query, key, value = (x.contiguous().view(B, -1, N, D//N).transpose(2, 1).contiguous().view(B*N, -1, D//N)
+        #                         for x in (query, key, value))
 
         outputs = self.attention(query, key, value)  # (B x N) x T x (D//N)
-        outputs = outputs.contiguous().view(B, N, -1, D//N).transpose(2, 1).contiguous().view(B, -1, D)
+        outputs = outputs.split_dim(0, N).combine_dims(-1, 1)
 
         return self.wo(outputs)
 
@@ -114,7 +115,7 @@ class EncoderLayer(nn.Module):
 
 class DecoderLayer(nn.Module):
 
-    def __init__(self, args, causal=True, diag=False, positional=False):
+    def __init__(self, args, causal=True, diag=False):
         super().__init__()
         self.positional = positional
         self.selfattn = ResidualBlock(
@@ -124,24 +125,15 @@ class DecoderLayer(nn.Module):
 
         self.attention = ResidualBlock(
             MultiHead(args.d_model, args.d_model, args.n_heads,
-                    args.drop_ratio),  # only noisy when doing cross-attention
+                    args.drop_ratio),
             args.d_model, args.drop_ratio)
-
-        if positional:
-            self.pos_selfattn = ResidualBlock(
-            MultiHead(args.d_model, args.d_model, args.n_heads,   # first try 1 positional head
-                    args.drop_ratio, causal, diag),
-            args.d_model, args.drop_ratio, pos=2)
 
         self.feedforward = ResidualBlock(
             FeedForward(args.d_model, args.d_hidden),
             args.d_model, args.drop_ratio)
 
     def forward(self, x, encoding):
-        x = self.selfattn(x, x, x)   #
-        if self.positional:
-            pos_encoding, weights = positional_encodings_like(x), None
-            x = self.pos_selfattn(pos_encoding, pos_encoding, x)  # positional attention
+        x = self.selfattn(x, x, x)
         x = self.feedforward(self.attention(x, encoding, encoding))
         return x
 
@@ -176,12 +168,11 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
 
-    def __init__(self, field, args, causal=True,
-                positional=False, diag=False, cosine_output=False):
+    def __init__(self, field, args, causal=True, diag=False):
 
         super().__init__()
         self.layers = nn.ModuleList(
-            [DecoderLayer(args, causal, diag, positional)
+            [DecoderLayer(args, causal)
             for i in range(args.n_layers)])
 
         self.out = nn.Linear(args.d_model, len(field.vocab))
