@@ -19,3 +19,6 @@ def test_mean():
 
 def test_std():
     mb_test(lambda x: x.std(2), (4, (True, 3), (False, 2)))
+
+def test_matmul():
+    mb_test(lambda a, b: a @ b, (4, (True, 3), (False, 2)), (4, (False, 2), (True, 3)))
