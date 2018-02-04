@@ -84,17 +84,13 @@ class MultiHead(nn.Module):
         self.n_heads = n_heads
 
     def forward(self, query, key, value):
-        query, key, value = self.wq(query), self.wk(key), self.wv(value)  # B x T x D
-        N = self.n_heads
-
-        query, key, value = (x.split_dim(-1, N).combine_dims(0, -1) for x in (query, key, value))
-
-        #query, key, value = (x.contiguous().view(B, -1, N, D//N).transpose(2, 1).contiguous().view(B*N, -1, D//N)
-        #                         for x in (query, key, value))
-
-        outputs = self.attention(query, key, value)  # (B x N) x T x (D//N)
-        outputs = outputs.split_dim(0, N).combine_dims(-1, 1)
-
+        query, key, value = self.wq(query), self.wk(key), self.wv(value)
+        # B x T x D -> B x T x (D/N) x N -> (B*N) x T x (D/N)
+        query, key, value = (x.split_dim(-1, self.n_heads).combine_dims(0, -1)
+                             for x in (query, key, value))
+        outputs = self.attention(query, key, value)
+        # (B*N) x T x (D/N) -> B x N x T x (D/N) -> B x T x D
+        outputs = outputs.split_dim(0, self.n_heads).combine_dims(-1, 1)
         return self.wo(outputs)
 
 class EncoderLayer(nn.Module):
