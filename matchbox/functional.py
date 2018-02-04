@@ -262,7 +262,7 @@ Variable.transpose = transpose
 def permute(batch, *permutation):
     data = batch.data.permute(*permutation)
     mask = batch.mask.permute(*permutation)
-    dims = tuple(batch.dims[i] for i in permutation)
+    dims = tuple(batch.dims[i - 1] for i in permutation[1:])
     return MaskedBatch(data, mask, dims)
 
 MaskedBatch.permute = permute
@@ -276,15 +276,16 @@ def split_dim(batch, dim, split_by):
              for d, s in enumerate(batch.data.size()))
     if not isinstance(batch, MaskedBatch):
         return batch.contiguous().view(*(n for tup in sizes for n in tup))
-    if batch.dims[dim - 1]:
-        raise ValueError("cannot split dynamic dimension")
-    data = batch.data.contiguous().view(*(n for tup in sizes for n in tup))
     if dim == 0:
-        sizes = ((s // split_by, split_by) if d == dim else (s,)
+        msizes = ((s // split_by, split_by) if d == dim else (s,)
                  for d, s in enumerate(batch.mask.size()))
-        mask = batch.mask.contiguous().view(*sizes)
+        mask = batch.mask.contiguous().view(*(n for tup in msizes for n in tup))
+        mask = mask.narrow(1, 0, 1)
     else:
+        if batch.dims[dim - 1]:
+            raise ValueError("cannot split dynamic dimension")
         mask = batch.mask.unsqueeze(dim)
+    data = batch.data.contiguous().view(*(n for tup in sizes for n in tup))
     dims = batch.dims[:dim] + (False,) + batch.dims[dim:]
     return MaskedBatch(data, mask, dims)
 
@@ -297,10 +298,11 @@ def combine_dims(batch, dim1, dim2):
     if dim2 == -1:
         dim2 = batch.dim() - 1
     if dim2 != dim1 + 1:
-        permutation = list(range(batch.dims()))
-        permutation = permutation[:dim1 + 1] + [dim2] + permutation[dim1 + 1:dim2] + permutation[dim2 + 1:]
-        batch = batch.permute(*(dim))err
-        batch = batch.transpose(dim1 + 1, dim2)
+        order = [n for n in range(batch.dim()) if n != dim2]
+        order.insert(dim1 + 1, dim2)
+        batch = batch.permute(*order)
+        if dim2 < dim1:
+            dim1 -= 1
     if not isinstance(batch, MaskedBatch):
         sizes = (batch.size(d + 1) * s if d == dim1 else s
                  for d, s in enumerate(batch.size()) if d != dim1 + 1)
@@ -309,9 +311,11 @@ def combine_dims(batch, dim1, dim2):
              for d, s in enumerate(batch.data.size()) if d != dim1 + 1)
     data = batch.data.contiguous().view(*sizes)
     if dim1 == 0:
-        sizes = (batch.mask.size(d + 1) * s if d == dim1 else s
-                 for d, s in enumerate(batch.mask.size()) if d != dim1 + 1)
-        mask = batch.mask.contiguous().view(*sizes)
+        mask = batch.mask.expand(*(s if d == dim1 + 1 else -1
+                                   for d, s in enumerate(batch.data.size())))
+        sizes = (s * mask.size(d + 1) if d == dim1 else s
+                 for d, s in enumerate(mask.size()) if d != dim1 + 1)
+        mask = mask.contiguous().view(*sizes)
     else:
         mask = batch.mask.squeeze(dim1 + 1)
     dims = batch.dims[:dim1] + batch.dims[dim1 + 1:]
