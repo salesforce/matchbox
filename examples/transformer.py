@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-from torchtext import data, datasets
 import matchbox
 from matchbox import functional as F
 from matchbox.data import MaskedBatchField
@@ -22,61 +21,47 @@ class LayerNorm(nn.Module):
 
 class FeedForward(nn.Module):
 
-    def __init__(self, d_model, d_hidden):
+    def __init__(self, d_model, d_hidden, drop_ratio):
         super().__init__()
         self.linear1 = nn.Linear(d_model, d_hidden)
         self.linear2 = nn.Linear(d_hidden, d_model)
+        self.dropout = nn.Dropout(drop_ratio)
 
     def forward(self, x):
-        return self.linear2(F.relu(self.linear1(x)))
+        return self.linear2(self.dropout(F.relu(self.linear1(x))))
 
 class ResidualBlock(nn.Module):
 
-    def __init__(self, layer, d_model, drop_ratio, pos=0):
+    def __init__(self, layer, d_model, drop_ratio):
         super().__init__()
         self.layer = layer
         self.dropout = nn.Dropout(drop_ratio)
-        self.layernorm = LayerNorm(d_model)
-        self.pos = pos
+        self.norm = LayerNorm(d_model)
 
     def forward(self, *x):
-        return self.layernorm(x[self.pos] + self.dropout(self.layer(*x)))
+        return x[0] + self.dropout(self.norm(self.layer(*x)))
 
 class Attention(nn.Module):
 
-    def __init__(self, d_key, drop_ratio, causal, diag=False, window=-1, noisy=False):
+    def __init__(self, d_key, drop_ratio, causal=False):
         super().__init__()
         self.scale = math.sqrt(d_key)
         self.dropout = nn.Dropout(drop_ratio)
         self.causal = causal
-        self.diag = diag
 
-    def forward(self, query, key, value=None):
-        dot_products = query @ key.transpose(1, 2)   # batch x trg_len x trg_len
+    def forward(self, query, key, value):
+        dot_products = query @ key.transpose(1, 2)
 
-        if query.dim() == 3 and self.causal:# and (query.size(1) == key.size(1)):
-            tri = key.data.new(key.size(1), key.size(1)).fill_(1).triu(1) * INF
-            dot_products.data.sub_(tri.unsqueeze(0)) # TODO
-
-        if self.diag:
-            inds = torch.arange(0, key.size(1)).long().view(1, 1, -1)
-            if key.is_cuda:
-                inds = inds.cuda(key.get_device())
-            dot_products.data.scatter_(1, inds.expand(dot_products.size(0), 1, inds.size(-1)), -INF)
-            # eye = key.data.new(key.size(1), key.size(1)).fill_(1).eye() * INF
-            # dot_products.data.sub_(eye.unsqueeze(0))
-
-        if value is None:
-            return dot_products
+        if query.dim() == 3 and self.causal:
+            dot_products = F.causal_mask(dot_products, in_dim=2, out_dim=1)
 
         return self.dropout(F.softmax(dot_products / self.scale, -1)) @ value
 
 class MultiHead(nn.Module):
 
-    def __init__(self, d_key, d_value, n_heads, drop_ratio,
-                causal=False, diag=False):
+    def __init__(self, attention, d_key, d_value, n_heads):
         super().__init__()
-        self.attention = Attention(d_key, drop_ratio, causal=causal, diag=diag)
+        self.attention = attention
         self.wq = nn.Linear(d_key, d_key)
         self.wk = nn.Linear(d_key, d_key)
         self.wv = nn.Linear(d_value, d_value)
@@ -98,40 +83,39 @@ class EncoderLayer(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.selfattn = ResidualBlock(
-            MultiHead2(
-                args.d_model, args.d_model, args.n_heads, args.drop_ratio,
-                use_wo=args.use_wo),
+            MultiHead(Attention(args.d_model, args.drop_ratio),
+                args.d_model, args.d_model, args.n_heads),
             args.d_model, args.drop_ratio)
         self.feedforward = ResidualBlock(
-            FeedForward(args.d_model, args.d_hidden),
+            FeedForward(args.d_model, args.d_hidden, args.drop_ratio),
             args.d_model, args.drop_ratio)
 
-    def forward(self, x, mask=None):
-        return self.feedforward(self.selfattn(x, x, x))
+    def forward(self, x):
+        x = self.selfattn(x, x, x)
+        return self.feedforward(x)
 
 class DecoderLayer(nn.Module):
 
-    def __init__(self, args, causal=True, diag=False):
+    def __init__(self, args):
         super().__init__()
-        self.positional = positional
         self.selfattn = ResidualBlock(
-            MultiHead(args.d_model, args.d_model, args.n_heads,
-                    args.drop_ratio, causal, diag),
+            MultiHead(Attention(args.d_model, args.drop_ratio, True),
+                      args.d_model, args.d_model, args.n_heads),
             args.d_model, args.drop_ratio)
 
         self.attention = ResidualBlock(
-            MultiHead(args.d_model, args.d_model, args.n_heads,
-                    args.drop_ratio),
+            MultiHead(Attention(args.d_model, args.drop_ratio),
+                      args.d_model, args.d_model, args.n_heads),
             args.d_model, args.drop_ratio)
 
         self.feedforward = ResidualBlock(
-            FeedForward(args.d_model, args.d_hidden),
+            FeedForward(args.d_model, args.d_hidden, args.drop_ratio),
             args.d_model, args.drop_ratio)
 
     def forward(self, x, encoding):
         x = self.selfattn(x, x, x)
-        x = self.feedforward(self.attention(x, encoding, encoding))
-        return x
+        x = self.attention(x, encoding, encoding)
+        return self.feedforward(x)
 
 class Encoder(nn.Module):
 
@@ -164,12 +148,10 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
 
-    def __init__(self, field, args, causal=True, diag=False):
-
+    def __init__(self, field, args):
         super().__init__()
         self.layers = nn.ModuleList(
-            [DecoderLayer(args, causal)
-            for i in range(args.n_layers)])
+            [DecoderLayer(args) for i in range(args.n_layers)])
 
         self.out = nn.Linear(args.d_model, len(field.vocab))
 
@@ -177,19 +159,10 @@ class Decoder(nn.Module):
         self.d_model = args.d_model
         self.field = field
         self.length_ratio = args.length_ratio
-        self.positional = positional
-        self.orderless = args.input_orderless
 
-    def forward(self, x, encoding, input_embeddings=False):
-
-        if not input_embeddings:  # compute input embeddings
-            if x.ndimension() == 2:
-                x = F.embedding(x, self.out.weight * math.sqrt(self.d_model))
-            elif x.ndimension() == 3:  # softmax relaxation
-                x = x @ self.out.weight * math.sqrt(self.d_model)  # batch x len x embed_size
-
-        if not self.orderless:
-            x += positional_encodings_like(x)
+    def forward(self, x, encoding):
+        x = F.embedding(x, self.out.weight * math.sqrt(self.d_model))
+        x += positional_encodings_like(x)
         x = self.dropout(x)
 
         for l, (layer, enc) in enumerate(zip(self.layers, encoding[1:])):
@@ -203,13 +176,11 @@ class Transformer(nn.Module):
         self.encoder = Encoder(src, args)
         self.decoder = Decoder(trg, args)
         self.field = trg
-        self.share_embeddings = args.share_embeddings
         if args.share_embeddings:
             self.encoder.out.weight = self.decoder.out.weight
 
     def forward(self, encoder_inputs, decoder_inputs, decoding=False, beam=1,
                 alpha=0.6, return_probs=False):
-
         encoding = self.encoder(encoder_inputs)
 
         if (return_probs and decoding) or (not decoding):
