@@ -15,10 +15,23 @@ def test_embedding():
     mb_assert(F.embedding, (xs, W), (xb, W), 4)
 
 def test_mean():
-    mb_test(lambda x: x.mean(2), (4, (True, 3), (False, 2)))
+    mb_test(lambda x: x.mean(2),
+            (4, (True, 3), (False, 2)))
 
 def test_std():
-    mb_test(lambda x: x.std(2), (4, (True, 3), (False, 2)))
+    mb_test(lambda x: x.std(2),
+            (4, (True, 3), (False, 2)))
 
 def test_matmul():
-    mb_test(lambda a, b: a @ b, (4, (True, 3), (False, 2)), (4, (False, 2), (True, 3)))
+    mb_test(lambda a, b: a @ b,
+            (4, (True, 3), (False, 2)), (4, (False, 2), (True, 3)))
+
+def test_transpose():
+    mb_test(lambda x: x.transpose(1, 2),
+            (4, (True, 3), (False, 2)))
+
+def test_causal_mask():
+    mb_test(lambda x: x.causal_mask(2, 1).softmax() @ x,
+            (4, (False, 3), (False, 3)))
+    mb_test(lambda x: (x @ x.transpose(1, 2)).causal_mask(2, 1).softmax() @ x,
+            (4, (True, 3), (False, 2)))

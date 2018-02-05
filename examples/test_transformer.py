@@ -19,7 +19,11 @@ def test_Attention():
             (4, (True, 3), (False, 2)), 0, 0)
     mb_test(Attention(2, 0, False),
             (4, (True, 3), (False, 2)), (4, (True, 3), (False, 2)), 1)
+    mb_test(Attention(2, 0, True),
+            (4, (True, 3), (False, 2)), 0, 0)
 
 def test_MultiHead():
     mb_test(MultiHead(Attention(6, 0, False), 6, 6, 3),
             (4, (True, 3), (False, 6)), (4, (True, 3), (False, 6)), 1)
+    mb_test(MultiHead(Attention(6, 0, True), 6, 6, 3),
+            (4, (True, 3), (False, 6)), 0, 0)
