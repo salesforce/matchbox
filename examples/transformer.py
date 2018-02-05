@@ -55,7 +55,7 @@ class Attention(nn.Module):
         if self.causal and query.dim() == 3:
             dot_products = F.causal_mask(dot_products, in_dim=2, out_dim=1)
 
-        return self.dropout(F.softmax(dot_products / self.scale, -1)) @ value
+        return self.dropout((dot_products / self.scale).softmax()) @ value
 
 class MultiHead(nn.Module):
 
@@ -185,7 +185,7 @@ class Transformer(nn.Module):
                 output = self.decoder.beam_search(encoding, beam, alpha)
 
             if return_probs:
-                return output, out, F.softmax(self.decoder.out(out))
+                return output, out, self.decoder.out(out).softmax()
             return output
 
         if return_probs:
