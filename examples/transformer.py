@@ -52,7 +52,7 @@ class Attention(nn.Module):
     def forward(self, query, key, value):
         dot_products = query @ key.transpose(1, 2)
 
-        if query.dim() == 3 and self.causal:
+        if self.causal and query.dim() == 3:
             dot_products = F.causal_mask(dot_products, in_dim=2, out_dim=1)
 
         return self.dropout(F.softmax(dot_products / self.scale, -1)) @ value
@@ -121,22 +121,15 @@ class Encoder(nn.Module):
 
     def __init__(self, field, args):
         super().__init__()
-        if args.share_embeddings:
-            self.out = nn.Linear(args.d_model, len(field.vocab))
-        else:
-            self.embed = nn.Embedding(len(field.vocab), args.d_model)
+        self.out = field.out
         self.layers = nn.ModuleList(
             [EncoderLayer(args) for i in range(args.n_layers)])
         self.dropout = nn.Dropout(args.drop_ratio)
         self.field = field
         self.d_model = args.d_model
-        self.share_embeddings = args.share_embeddings
 
     def forward(self, x):
-        if self.share_embeddings:
-            x = F.embedding(x, self.out.weight * math.sqrt(self.d_model))
-        else:
-            x = self.embed(x)
+        x = F.embedding(x, self.out.weight * math.sqrt(self.d_model))
         x += positional_encodings_like(x)
         encoding = [x]
 
@@ -153,7 +146,7 @@ class Decoder(nn.Module):
         self.layers = nn.ModuleList(
             [DecoderLayer(args) for i in range(args.n_layers)])
 
-        self.out = nn.Linear(args.d_model, len(field.vocab))
+        self.out = field.out
 
         self.dropout = nn.Dropout(args.drop_ratio)
         self.d_model = args.d_model
@@ -173,11 +166,10 @@ class Transformer(nn.Module):
 
     def __init__(self, src, trg, args):
         super().__init__()
+        for field in set((src, trg)):
+            field.out = nn.Linear(args.d_model, len(field.vocab))
         self.encoder = Encoder(src, args)
         self.decoder = Decoder(trg, args)
-        self.field = trg
-        if args.share_embeddings:
-            self.encoder.out.weight = self.decoder.out.weight
 
     def forward(self, encoder_inputs, decoder_inputs, decoding=False, beam=1,
                 alpha=0.6, return_probs=False):
