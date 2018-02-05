@@ -10,6 +10,9 @@ def dropout(batch, p=0.5, training=False, inplace=False):
     data = F.dropout(batch.data, p, training, inplace)
     return MaskedBatch(data, batch.mask, batch.dims)
 
+MaskedBatch.dropout = dropout
+Variable.dropout = dropout
+
 def linear(batch, weight, bias=None):
     if not isinstance(batch, MaskedBatch):
         return F.linear(batch, weight, bias)
@@ -61,6 +64,9 @@ def softmax(batch, dim=-1):
         mask = batch.mask
     return MaskedBatch(data, mask, dims)
 
+MaskedBatch.softmax = softmax
+Variable.softmax = softmax
+
 def matmul(batch1, batch2, out=None):
     if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
         return F.matmul(batch1, batch2)
@@ -70,26 +76,26 @@ def matmul(batch1, batch2, out=None):
         if out is not None:
             raise NotImplementedError("matmul with out argument not implemented")
         if dim_batch1 == 1 and dim_batch2 == 1:
-            if (batch1.dims[0] or batch2.dims[0]) and not batch1.mask.eq(batch2.mask).all():
-                raise ValueError("cannot contract non-matching dimensions")
+            #if (batch1.dims[0] or batch2.dims[0]) and not batch1.mask.eq(batch2.mask).all():
+            #    raise ValueError("cannot contract non-matching dimensions")
             data = batch1.data.unsqueeze(-2) @ batch2.data.unsqueeze(-1)
             mask = batch1.mask[:, :1]
             dims = ()
         if dim_batch1 == 2 and dim_batch2 == 1:
-            if (batch1.dims[1] or batch2.dims[0]) and not batch1.mask[:, 0].eq(batch2.mask).all():
-                raise ValueError("cannot contract non-matching dimensions")
+            #if (batch1.dims[1] or batch2.dims[0]) and not batch1.mask[:, 0].eq(batch2.mask).all():
+            #    raise ValueError("cannot contract non-matching dimensions")
             mask = batch1.mask[:, :, :1] @ batch2.mask[:, :1]
             data = batch1.data @ batch2.data
             dims = batch1.dims[:1]
         elif dim_batch1 == 1 and dim_batch2 == 2:
-            if (batch1.dims[0] or batch2.dims[0]) and not batch1.mask.eq(batch2.mask[:, :, 0]).all():
-                raise ValueError("cannot contract non-matching dimensions")
+            #if (batch1.dims[0] or batch2.dims[0]) and not batch1.mask.eq(batch2.mask[:, :, 0]).all():
+            #    raise ValueError("cannot contract non-matching dimensions")
             mask = batch1.mask[:, :1].unsqueeze(-2) @ batch2.mask[:, :1, :]
             data = batch1.data.unsqueeze(-2) @ batch2.data
             dims = batch2.dims[1:]
         elif dim_batch1 == 2 and dim_batch2 == 2:
-            if (batch1.dims[1] or batch2.dims[0]) and not batch1.mask[:, 0].eq(batch2.mask[:, :, 0]).all():
-                raise ValueError("cannot contract non-matching dimensions")
+            #if (batch1.dims[1] or batch2.dims[0]) and not batch1.mask[:, 0].eq(batch2.mask[:, :, 0]).all():
+            #    raise ValueError("cannot contract non-matching dimensions")
             mask = batch1.mask[:, :, :1] @ batch2.mask[:, :1, :]
             data = batch1.data @ batch2.data
             dims = batch1.dims[:1] + batch2.dims[1:]
@@ -324,6 +330,33 @@ def combine_dims(batch, dim1, dim2):
 MaskedBatch.combine_dims = combine_dims
 Variable.combine_dims = combine_dims
 
+def causal_mask(batch, in_dim, out_dim):
+    '''if in_dim is indexed by i and out_dim by j, masks ret[i,j] where i > j'''
+    if not isinstance(batch, MaskedBatch):
+        # TODO or we could just promote to MaskedBatch /shrug
+        if in_dim == 1 and out_dim == 2:
+            return batch - batch.new(
+                *batch.size()[1:]).fill_(1e10).tril(-1).unsqueeze(0)
+        elif in_dim == 2 and out_dim == 1:
+            return batch - batch.new(
+                *batch.size()[1:]).fill_(1e10).triu(1).unsqueeze(0)
+        else:
+            raise NotImplementedError("unsupported arguments for causal_mask")
+    if in_dim == 1 and out_dim == 2:
+        mask = batch.mask * batch.mask.new(
+            *batch.data.size()[1:]).fill_(1).triu(0).unsqueeze(0)
+    elif in_dim == 2 and out_dim == 1:
+        mask = batch.mask * batch.mask.new(
+            *batch.data.size()[1:]).fill_(1).tril(0).unsqueeze(0)
+    else:
+        raise NotImplementedError("unsupported arguments for causal_mask")
+    dims = tuple(True if d + 1 in (in_dim, out_dim) else b
+                 for d, b in enumerate(batch.dims))
+    return MaskedBatch(batch.data, mask, dims)
+
+MaskedBatch.causal_mask = causal_mask
+Variable.causal_mask = causal_mask
+
 # def _for(closure, iterator):
 #     for i in iterator:
 #         closure(i)
@@ -343,7 +376,7 @@ Variable.__mul__ = _inject_arith(Variable.__mul__, lambda a, b: b * a)
 # Variable.__truediv__ = _inject_arith(Variable.__add__, lambda a, b:)
 
 import sys
-torch.nn.functional = sys.modules[__name__] # monkeys in the bamboo tree
+#torch.nn.functional = sys.modules[__name__] # monkeys in the bamboo tree
 import torch.nn.modules.sparse
 torch.nn.modules.sparse.F = sys.modules[__name__]
 import torch.nn.modules.linear
