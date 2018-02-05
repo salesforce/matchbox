@@ -32,5 +32,5 @@ def mb_assert(f, xsarr, xbarr, bs):
           for j in range(bs)]
     ybs = f(*xbarr).examples()
     for y, yb in zip(ys, ybs):
-        np.testing.assert_allclose(y.data.numpy(), yb.data.numpy(), rtol=1e-6)
+        np.testing.assert_allclose(y.data.numpy(), yb.data.numpy(), rtol=1e-5)
     #assert all(y.eq(yb).all() for y, yb in zip(ys, ybs))
