@@ -71,33 +71,36 @@ def matmul(batch1, batch2, out=None):
     if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
         return F.matmul(batch1, batch2)
     if isinstance(batch1, MaskedBatch) and isinstance(batch2, MaskedBatch):
-        dim_batch1 = len(batch1.dims)
-        dim_batch2 = len(batch2.dims)
+        dims1 = len(batch1.dims)
+        dims2 = len(batch2.dims)
+        data1 = batch1.data * batch1.mask
+        data2 = batch2.data * batch2.mask
+        if dims1 == 1:
+            data1 = data1.unsqueeze(-2)
+        if dims2 == 1 and dims1 == 1:
+            data2 = data2.unsqueeze(-1)
+        data = data1 @ data2
         if out is not None:
             raise NotImplementedError("matmul with out argument not implemented")
-        if dim_batch1 == 1 and dim_batch2 == 1:
+        if dims1 == 1 and dims2 == 1:
             #if (batch1.dims[0] or batch2.dims[0]) and not batch1.mask.eq(batch2.mask).all():
             #    raise ValueError("cannot contract non-matching dimensions")
-            data = batch1.data.unsqueeze(-2) @ batch2.data.unsqueeze(-1)
             mask = batch1.mask[:, :1]
             dims = ()
-        if dim_batch1 == 2 and dim_batch2 == 1:
+        if dims1 == 2 and dims2 == 1:
             #if (batch1.dims[1] or batch2.dims[0]) and not batch1.mask[:, 0].eq(batch2.mask).all():
             #    raise ValueError("cannot contract non-matching dimensions")
             mask = batch1.mask[:, :, :1] @ batch2.mask[:, :1]
-            data = batch1.data @ batch2.data
             dims = batch1.dims[:1]
-        elif dim_batch1 == 1 and dim_batch2 == 2:
+        elif dims1 == 1 and dims2 == 2:
             #if (batch1.dims[0] or batch2.dims[0]) and not batch1.mask.eq(batch2.mask[:, :, 0]).all():
             #    raise ValueError("cannot contract non-matching dimensions")
             mask = batch1.mask[:, :1].unsqueeze(-2) @ batch2.mask[:, :1, :]
-            data = batch1.data.unsqueeze(-2) @ batch2.data
             dims = batch2.dims[1:]
-        elif dim_batch1 == 2 and dim_batch2 == 2:
+        elif dims1 == 2 and dims2 == 2:
             #if (batch1.dims[1] or batch2.dims[0]) and not batch1.mask[:, 0].eq(batch2.mask[:, :, 0]).all():
             #    raise ValueError("cannot contract non-matching dimensions")
             mask = batch1.mask[:, :, :1] @ batch2.mask[:, :1, :]
-            data = batch1.data @ batch2.data
             dims = batch1.dims[:1] + batch2.dims[1:]
         else:
             raise NotImplementedError("matmul not implemented with batches of 3+D tensors")
@@ -107,54 +110,55 @@ def matmul(batch1, batch2, out=None):
 
 MaskedBatch.__matmul__ = matmul
 
-def _elementwise_unary(fn, zero_preserving=False):
+def _elementwise_unary(fn):
     def inner(batch, **kwargs):
         if not isinstance(batch, MaskedBatch):
             return fn(batch, **kwargs)
         data = fn(batch.data, **kwargs)
         mask = batch.mask
         dims = batch.dims
-        if not zero_preserving:
-            data *= mask
         return MaskedBatch(data, mask, dims)
     return inner
 
-def _elementwise_binary(fn, identity):
+def _elementwise_binary(fn, left_identity, right_identity):
     def inner(batch1, batch2, **kwargs):
         if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
             return fn(batch1, batch2, **kwargs)
         if isinstance(batch2, MaskedBatch):
-            if identity is None:
-                raise ValueError("binary elementwise operations require an identity")
-            data1, imask1 = batch1.data, 1 - batch1.mask
-            data2, imask2 = batch2.data, 1 - batch2.mask
-            if identity != 0: # TODO figure out left-identity vs right-identity
-                data1 = data1 + imask1 * identity
-                data2 = data2 + imask2 * identity
+            lmask_minus_rmask = float((batch1.mask - batch2.mask).sum())
+            if lmask_minus_rmask >= 0: # by default, treat left as accumulating
+                if right_identity is None:
+                    raise ValueError("identity required for binary elementwise "
+                                     "operation with accumulating semantics")
+                mask, dims = batch2.mask, batch2.dims
+                data1 = batch1.data
+                data2 = batch2.data + (1 - batch2.mask) * right_identity
+            else:
+                if left_identity is None:
+                    raise ValueError("identity required for binary elementwise "
+                                     "operation with accumulating semantics")
+                mask, dims = batch1.mask, batch1.dims
+                data1 = batch1.data + (1 - batch1.mask) * left_identity
+                data2 = batch2.data
             data = fn(data1, data2, **kwargs)
-            if batch1.dims != batch2.dims:
-                raise NotImplementedError("binary elementwise operations currently "
-                                          "require matching static/dynamic dims")
-            mask = 1 - imask1 * imask2
-            dims = batch1.dims
         else:
             mask = batch1.mask
-            if identity == 0:
-                batch2 = batch2 * mask
             data = fn(batch1.data, batch2, **kwargs)
             dims = batch1.dims
-            if identity != 0: # TODO
-                data *= mask
         return MaskedBatch(data, mask, dims)
     return inner
 
-MaskedBatch.relu = relu = _elementwise_unary(F.relu, zero_preserving=True)
-MaskedBatch.tanh = tanh = _elementwise_unary(F.tanh, zero_preserving=True)
+MaskedBatch.relu = relu = _elementwise_unary(F.relu)
+MaskedBatch.tanh = tanh = _elementwise_unary(F.tanh)
 MaskedBatch.sigmoid = sigmoid = _elementwise_unary(F.sigmoid)
-MaskedBatch.__add__ = _elementwise_binary(torch.add, identity=0)
-MaskedBatch.__sub__ = _elementwise_binary(lambda a, b: a - b, identity=0)
-MaskedBatch.__mul__ = _elementwise_binary(torch.mul, identity=1)
-MaskedBatch.__truediv__ = _elementwise_binary(torch.div, identity=1)
+MaskedBatch.__add__ = _elementwise_binary(
+    torch.add, left_identity=0, right_identity=0)
+MaskedBatch.__sub__ = _elementwise_binary(
+    lambda a, b: a - b, left_identity=None, right_identity=0)
+MaskedBatch.__mul__ = _elementwise_binary(
+    torch.mul, left_identity=1, right_identity=1)
+MaskedBatch.__truediv__ = _elementwise_binary(
+    torch.div, left_identity=None, right_identity=1)
 
 def _reduce(fn, zero_preserving=False):
     def inner(batch, dim=None, keepdim=False):
@@ -180,7 +184,7 @@ def _reduce(fn, zero_preserving=False):
                 mask = batch.mask[tuple(0 if i == dim else slice(None)
                                         for i in range(batch.mask.dim()))]
                 dims = tuple(d for i, d in enumerate(batch.dims) if i != dim - 1)
-        data = fn(batch.data, dim=dim, keepdim=keepdim)
+        data = fn(batch.data * batch.mask, dim=dim, keepdim=keepdim)
         return MaskedBatch(data, mask, dims)
     return inner
 
