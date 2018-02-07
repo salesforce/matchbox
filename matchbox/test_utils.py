@@ -7,6 +7,32 @@ from matchbox import MaskedBatch
 import random
 import numpy as np
 
+def mb_rand(*dims):
+    xs = [Variable(torch.rand(1, *(random.randint(1, size) if b else size
+                  for b, size in dims[1:]))) for i in range(dims[0])]
+    xb = MaskedBatch.fromlist(xs, tuple(b for b, d in dims[1:]))
+    return xs, xb
+
+def mb_assert_allclose(xs, ybs):
+    if isinstance(ybs, Variable):
+        np.testing.assert_allclose(xs.data.numpy(), ybs.data.numpy(), rtol=1e-4)
+    elif isinstance(ybs, MaskedBatch):
+        mb_assert_allclose(xs, ybs.examples())
+    else:
+        if isinstance(ybs, list):
+            for j, yb in enumerate(ybs):
+                for i, y in enumerate(yb.examples()):
+                    mb_assert_allclose(xs[i][j], y)
+        else:
+            for x, yb in zip(xs, ybs):
+                mb_assert_allclose(x, yb)
+
+def mb_assert(f, xsarr, xbarr, bs):
+    ys = [f(*(xs[j] if isinstance(xs, list) else xs for xs in xsarr))
+          for j in range(bs)]
+    ybs = f(*xbarr)
+    mb_assert_allclose(ys, ybs)
+
 def mb_test(f, *dimsarr):
     xsarr, xbarr = [], []
     bs = None
@@ -16,21 +42,11 @@ def mb_test(f, *dimsarr):
             xbarr.append(xbarr[dims])
         elif isinstance(dims[-1], tuple):
             bs = dims[0]
-            sizes = (1, *(random.randint(1, size) if b else size
-                          for b, size in dims[1:]))
-            xs = [Variable(torch.rand(*sizes)) for i in range(dims[0])]
+            xs, xb = mb_rand(*dims)
             xsarr.append(xs)
-            xbarr.append(MaskedBatch.fromlist(xs, tuple(b for b, d in dims[1:])))
+            xbarr.append(xb)
         else:
             x = Variable(torch.rand(*dims))
             xsarr.append(x)
             xbarr.append(x)
     mb_assert(f, xsarr, xbarr, bs)
-
-def mb_assert(f, xsarr, xbarr, bs):
-    ys = [f(*(xs[j] if isinstance(xs, list) else xs for xs in xsarr))
-          for j in range(bs)]
-    ybs = f(*xbarr).examples()
-    for y, yb in zip(ys, ybs):
-        np.testing.assert_allclose(y.data.numpy(), yb.data.numpy(), rtol=1e-5)
-    #assert all(y.eq(yb).all() for y, yb in zip(ys, ybs))
