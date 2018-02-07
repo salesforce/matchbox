@@ -6,6 +6,20 @@ from matchbox.data import MaskedBatchField
 
 import math
 
+def positional_encodings_like(x, t=None):
+    T, D = x.maxsize(-2), x.maxsize(-1)
+    positions = torch.arange(0, T, out=x.new(T)) if t is None else t
+    channels = torch.arange(0, D, 2, out=x.new(D)) / D
+    channels = 1 / (10000 ** channels)
+    encodings = positions.unsqueeze(-1) @ channels.unsqueeze(0)
+    encodings = torch.stack((encodings.sin(), encodings.cos()), -1)
+    encodings = encodings.contiguous().view(*encodings.size()[:-2], -1)
+
+    if encodings.dim() == 2:
+        encodings = encodings.unsqueeze(0).expand(x.maxsize())
+
+    return encodings
+
 class LayerNorm(nn.Module):
 
     def __init__(self, d_model, eps=1e-6):
@@ -53,7 +67,7 @@ class Attention(nn.Module):
         dot_products = query @ key.transpose(1, 2)
 
         if self.causal and query.dim() == 3:
-            dot_products = F.causal_mask(dot_products, in_dim=2, out_dim=1)
+            dot_products = dot_products.causal_mask(in_dim=2, out_dim=1)
 
         return self.dropout((dot_products / self.scale).softmax()) @ value
 
@@ -131,9 +145,8 @@ class Encoder(nn.Module):
     def forward(self, x):
         x = F.embedding(x, self.out.weight * math.sqrt(self.d_model))
         x += positional_encodings_like(x)
-        encoding = [x]
-
         x = self.dropout(x)
+        encoding = []
         for layer in self.layers:
             x = layer(x)
             encoding.append(x)
@@ -143,11 +156,9 @@ class Decoder(nn.Module):
 
     def __init__(self, field, args):
         super().__init__()
+        self.out = field.out
         self.layers = nn.ModuleList(
             [DecoderLayer(args) for i in range(args.n_layers)])
-
-        self.out = field.out
-
         self.dropout = nn.Dropout(args.drop_ratio)
         self.d_model = args.d_model
         self.field = field
@@ -158,7 +169,7 @@ class Decoder(nn.Module):
         x += positional_encodings_like(x)
         x = self.dropout(x)
 
-        for l, (layer, enc) in enumerate(zip(self.layers, encoding[1:])):
+        for l, (layer, enc) in enumerate(zip(self.layers, encoding)):
             x = layer(x, enc)
         return x
 
