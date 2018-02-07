@@ -54,11 +54,33 @@ class MaskedBatch(object):
     def dim(self):
         return self.data.dim()
 
+    def size(self, dim=None):
+        if dim is not None and dim < 0:
+            dim = self.dim() + dim
+        if dim is None and any(self.dims) or dim is not None and self.dims[dim - 1]:
+            raise NotImplementedError("cannot get size in dynamic dimension")
+        return self.data.size() if dim is None else self.data.size(dim)
+
+    def new(self, *sizes):
+        # if self.data.size(0) != 1:
+        #     raise NotImplementedError
+        return self.data.new(*sizes)
+
 if torch.__version__ < '0.4':
-    def var_new(self, *args, **kwargs):
-        n = self.data.new(*args, **kwargs)
-        return torch.autograd.Variable(n)
-    torch.autograd.Variable.new = var_new
+    def _var_method(method_name):
+        def inner(self, *args, **kwargs):
+            t = getattr(self.data, method_name)(*args, **kwargs)
+            return torch.autograd.Variable(t)
+        return inner
+    torch.autograd.Variable.new = _var_method('new')
+
+    _old_arange = torch.arange
+    def _new_arange(*args, out=None):
+        if isinstance(out, torch.autograd.Variable):
+            torch.arange(*args, out=out.data)
+            return out
+        return _old_arange(*args, out=out)
+    torch.arange = _new_arange
 
     def embed_forward(self, input):
         return torch.nn.functional.embedding(
