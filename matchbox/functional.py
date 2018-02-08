@@ -50,7 +50,7 @@ def softmax(batch, dim=-1):
     if dim == 0:
         raise ValueError("cannot softmax over batch dimension")
     elif dim < 0:
-        dim = batch.dim() + dim
+        dim += batch.dim()
     dims = batch.dims
     if dims[dim - 1]:
         data = F.softmax(batch.data * batch.mask, dim) * batch.mask
@@ -154,7 +154,7 @@ def _reduce(fn, zero_preserving=False):
             dims = ()
         else:
             if dim < 0:
-                dim = batch.data.dim() + dim
+                dim += batch.dim()
             if not zero_preserving and batch.dims[dim - 1]:
                 raise NotImplementedError(
                     "cannot reduce over dynamic dim with non-zero-preserving kernel")
@@ -188,6 +188,29 @@ def getitem(batch, index):
     return MaskedBatch(data, mask, dims)
 
 MaskedBatch.__getitem__ = getitem
+
+def split(batch, split_size_or_sections, dim=0):
+    if not isinstance(batch, MaskedBatch):
+        yield from torch.split(batch, split_size_or_sections, dim)
+        return
+    if dim < 0:
+        dim += batch.dim()
+    if dim > 0 and batch.dims[dim - 1]:
+        raise ValueError("cannot split along dynamic dimension")
+    for data in torch.split(batch.data, split_size_or_sections, dim):
+        yield MaskedBatch(data, batch.mask, batch.dims)
+
+MaskedBatch.split = split
+
+def chunk(batch, chunks, dim=0):
+    if dim < 0:
+        dim += batch.dim()
+    if dim > 0 and batch.dims[dim - 1]:
+        raise ValueError("cannot chunk along dynamic dimension")
+    split_size = (batch.size(dim) + chunks - 1) // chunks
+    return split(batch, split_size, dim)
+
+MaskedBatch.chunk = chunk
 
 def unbind(batch, dim):
     if not isinstance(batch, MaskedBatch):
@@ -230,9 +253,9 @@ MaskedBatch.view = view
 def transpose(batch, dim1, dim2):
     if dim1 > batch.dim() or dim2 > batch.dim():
         if dim1 < 0:
-            dim1 = batch.dim() + dim1
+            dim1 += batch.dim()
         if dim2 < 0:
-            dim2 = batch.dim() + dim2
+            dim2 += batch.dim()
         permutation = [dim2 if i == dim1 else dim1 if i == dim2 else i
                        for i in range(batch.dim() + 1)][:batch.dim()]
         return batch.permute(*permutation)
@@ -258,7 +281,7 @@ MaskedBatch.permute = permute
 
 def split_dim(batch, dim, split_by):
     if dim < 0:
-        dim = batch.dim() + dim
+        dim += batch.dim()
     if batch.data.size(dim) % split_by != 0:
         raise ValueError("size of dim not divisible by split_by")
     sizes = ((s // split_by, split_by) if d == dim else (s,)
@@ -283,9 +306,9 @@ Variable.split_dim = split_dim
 
 def combine_dims(batch, dim1, dim2):
     if dim1 < 0:
-        dim1 = batch.dim() + dim1
+        dim1 += batch.dim()
     if dim2 < 0:
-        dim2 = batch.dim() + dim2
+        dim2 += batch.dim()
     if dim2 != dim1 + 1:
         order = [n for n in range(batch.dim()) if n != dim2]
         order.insert(dim1 + 1, dim2)
