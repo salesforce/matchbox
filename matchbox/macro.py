@@ -41,7 +41,6 @@ class LoopAccumulation(gast.NodeTransformer):
             for n in gast.walk(child):
                 if isinstance(n, gast.Name) and isinstance(n.ctx, gast.Load):
                     loads.add(n.id)
-        for child in node.body:
             if isinstance(child, gast.Assign):
                 if len(child.targets) > 1:
                     raise NotImplementedError("cannot process LCD that is "
