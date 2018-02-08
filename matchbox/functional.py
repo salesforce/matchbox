@@ -19,9 +19,7 @@ def linear(batch, weight, bias=None):
     if batch.dims[-1]:
         raise ValueError("cannot contract static and dynamic dimensions")
     data = F.linear(batch.data, weight, bias)
-    if batch.accumulating:
-        data = data * batch.mask + batch.data * (1 - batch.mask)
-    return MaskedBatch(data, batch.mask, batch.dims, batch.accumulating)
+    return MaskedBatch(data, batch.mask, batch.dims)
 
 def embedding(batch, weight, padding_idx=None, max_norm=None, norm_type=2,
               scale_grad_by_freq=False, sparse=False):
@@ -43,9 +41,8 @@ def embedding(batch, weight, padding_idx=None, max_norm=None, norm_type=2,
     data = compat_embedding(
         data, weight, padding_idx, max_norm, norm_type, scale_grad_by_freq, sparse)
     mask = batch.mask.unsqueeze(-1).float()
-    data = data * mask
     dims = batch.dims + (False,)
-    return MaskedBatch(data, mask, dims, False)
+    return MaskedBatch(data, mask, dims)
 
 def softmax(batch, dim=-1):
     if not isinstance(batch, MaskedBatch):
@@ -64,7 +61,7 @@ def softmax(batch, dim=-1):
     else:
         data = F.softmax(batch.data, dim)
         mask = batch.mask
-    return MaskedBatch(data, mask, dims, False)
+    return MaskedBatch(data, mask, dims)
 
 MaskedBatch.softmax = softmax
 Variable.softmax = softmax
@@ -108,7 +105,7 @@ def matmul(batch1, batch2, out=None):
             raise NotImplementedError("matmul not implemented with batches of 3+D tensors")
     else:
         raise NotImplementedError("matmul not implemented between MaskedBatch and tensor")
-    return MaskedBatch(data, mask, dims, False)
+    return MaskedBatch(data, mask, dims)
 
 MaskedBatch.__matmul__ = matmul
 
@@ -119,54 +116,32 @@ def _elementwise_unary(fn):
         data = fn(batch.data, **kwargs)
         mask = batch.mask
         dims = batch.dims
-        if batch.accumulating:
-            data = data * batch.mask + batch.data * (1 - batch.mask)
-        return MaskedBatch(data, mask, dims, batch.accumulating)
+        return MaskedBatch(data, mask, dims)
     return inner
 
-def _elementwise_binary(fn, left_identity, right_identity):
+def _elementwise_binary(fn):
     def inner(batch1, batch2, **kwargs):
         if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
             return fn(batch1, batch2, **kwargs)
         if isinstance(batch2, MaskedBatch):
-            a1, a2 = batch1.accumulating, batch2.accumulating
-            if (a1 and not a2) or (not a1 or a2) and float(
-                    (batch1.mask - batch2.mask).sum()) >= -0.5:
-                if right_identity is None:
-                    raise ValueError("identity required for binary elementwise "
-                                     "operation with accumulating semantics")
-                mask, dims = batch2.mask, batch2.dims
-                data1 = batch1.data
-                data2 = batch2.data * mask + (1 - mask) * right_identity
-            else:
-                if left_identity is None:
-                    raise ValueError("identity required for binary elementwise "
-                                     "operation with accumulating semantics")
-                mask, dims = batch1.mask, batch1.dims
-                data1 = batch1.data * mask + (1 - mask) * left_identity
-                data2 = batch2.data
-            data = fn(data1, data2, **kwargs)
-            accumulating = a1 or a2
+            mask = batch1.mask * batch2.mask
+            data = fn(batch1.data, batch2.data, **kwargs)
+            dims = tuple(b1 or b2 for b1, b2 in zip(batch1.dims, batch2.dims))
         else:
             mask = batch1.mask
             data = fn(batch1.data, batch2, **kwargs)
             dims = batch1.dims
-            accumulating = True
-        return MaskedBatch(data, mask, dims, accumulating)
+        return MaskedBatch(data, mask, dims)
     return inner
 
 MaskedBatch.relu = relu = _elementwise_unary(F.relu)
 MaskedBatch.tanh = tanh = _elementwise_unary(F.tanh)
 MaskedBatch.sigmoid = sigmoid = _elementwise_unary(F.sigmoid)
 
-MaskedBatch.__add__ = _elementwise_binary(
-    torch.add, left_identity=0, right_identity=0)
-MaskedBatch.__sub__ = _elementwise_binary(
-    lambda a, b: a - b, left_identity=None, right_identity=0)
-MaskedBatch.__mul__ = _elementwise_binary(
-    torch.mul, left_identity=1, right_identity=1)
-MaskedBatch.__truediv__ = _elementwise_binary(
-    torch.div, left_identity=None, right_identity=1)
+MaskedBatch.__add__ = _elementwise_binary(torch.add)
+MaskedBatch.__sub__ = _elementwise_binary(lambda a, b: a - b)
+MaskedBatch.__mul__ = _elementwise_binary(torch.mul)
+MaskedBatch.__truediv__ = _elementwise_binary(torch.div)
 
 def _reduce(fn, zero_preserving=False):
     def inner(batch, dim=None, keepdim=False):
@@ -193,7 +168,7 @@ def _reduce(fn, zero_preserving=False):
                                         for i in range(batch.mask.dim()))]
                 dims = tuple(d for i, d in enumerate(batch.dims) if i != dim - 1)
         data = fn(batch.data * batch.mask, dim=dim, keepdim=keepdim)
-        return MaskedBatch(data, mask, dims, False)
+        return MaskedBatch(data, mask, dims)
     return inner
 
 MaskedBatch.sum = _reduce(torch.sum, zero_preserving=True)
@@ -210,7 +185,7 @@ def getitem(batch, index):
                        for i, b in zip(index, (True,) + batch.dims))]
     dims = tuple(b for i, b in zip(index[1:] + (slice(None),) * len(batch.dims), batch.dims)
                  if not isinstance(i, int)) # could be faster
-    return MaskedBatch(data, mask, dims, batch.accumulating)
+    return MaskedBatch(data, mask, dims)
 
 MaskedBatch.__getitem__ = getitem
 
@@ -223,19 +198,18 @@ def unbind(batch, dim):
     dims = tuple(b for d, b in enumerate(batch.dims) if d != dim - 1)
     if batch.dims[dim - 1]:
         for data, mask in zip(torch.unbind(batch.data, dim), torch.unbind(batch.mask, dim)):
-            yield MaskedBatch(data, mask, dims, batch.accumulating)
+            yield MaskedBatch(data, mask, dims)
     else:
         mask = batch.mask.squeeze(dim)
         for data in torch.unbind(batch.data, dim):
-            yield MaskedBatch(data, mask, dims, batch.accumulating)
+            yield MaskedBatch(data, mask, dims)
 
 MaskedBatch.unbind = unbind
 Variable.unbind = unbind
 
 def contiguous(batch):
     return MaskedBatch(
-        batch.data.contiguous(), batch.mask.contiguous(), batch.dims,
-        batch.accumulating)
+        batch.data.contiguous(), batch.mask.contiguous(), batch.dims)
 
 MaskedBatch.contiguous = contiguous
 
@@ -249,7 +223,7 @@ def view(batch, *sizes):
                                for i in range(1, len(args)))
     mask = batch.mask.view(*mask_sizes) # TODO can this throw if data doesn't?
     dims = tuple(sizes[i] == -1 for i in range(1, len(args)))
-    return MaskedBatch(data, mask, dims, batch.accumulating)
+    return MaskedBatch(data, mask, dims, batch)
 
 MaskedBatch.view = view
 
@@ -269,7 +243,7 @@ def transpose(batch, dim1, dim2):
     dims = list(batch.dims)
     dims[dim1 - 1], dims[dim2 - 1] = dims[dim2 - 1], dims[dim1 - 1]
     dims = tuple(dims)
-    return MaskedBatch(data, mask, dims, batch.accumulating)
+    return MaskedBatch(data, mask, dims)
 
 MaskedBatch.transpose = transpose
 Variable.transpose = transpose
@@ -278,7 +252,7 @@ def permute(batch, *permutation):
     data = batch.data.permute(*permutation)
     mask = batch.mask.permute(*permutation)
     dims = tuple(batch.dims[i - 1] for i in permutation[1:])
-    return MaskedBatch(data, mask, dims, batch.accumulating)
+    return MaskedBatch(data, mask, dims)
 
 MaskedBatch.permute = permute
 
@@ -302,7 +276,7 @@ def split_dim(batch, dim, split_by):
         mask = batch.mask.unsqueeze(dim)
     data = batch.data.contiguous().view(*(n for tup in sizes for n in tup))
     dims = batch.dims[:dim] + (False,) + batch.dims[dim:]
-    return MaskedBatch(data, mask, dims, batch.accumulating)
+    return MaskedBatch(data, mask, dims)
 
 MaskedBatch.split_dim = split_dim
 Variable.split_dim = split_dim
@@ -334,7 +308,7 @@ def combine_dims(batch, dim1, dim2):
     else:
         mask = batch.mask.squeeze(dim1 + 1)
     dims = batch.dims[:dim1] + batch.dims[dim1 + 1:]
-    return MaskedBatch(data, mask, dims, batch.accumulating)
+    return MaskedBatch(data, mask, dims)
 
 MaskedBatch.combine_dims = combine_dims
 Variable.combine_dims = combine_dims
@@ -361,7 +335,7 @@ def causal_mask(batch, in_dim, out_dim):
         raise NotImplementedError("unsupported arguments for causal_mask")
     dims = tuple(True if d + 1 in (in_dim, out_dim) else b
                  for d, b in enumerate(batch.dims))
-    return MaskedBatch(batch.data, mask, dims, batch.accumulating)
+    return MaskedBatch(batch.data, mask, dims)
 
 MaskedBatch.causal_mask = causal_mask
 Variable.causal_mask = causal_mask
@@ -375,23 +349,27 @@ Variable.maxsize = maxsize
 def _synchronize(batch):
     if not isinstance(batch, MaskedBatch):
         return batch
-    if not batch.accumulating:
-        raise ValueError("cannot synchronize non-accumulating batch")
     if any(batch.dims):
         raise ValueError("cannot synchronize batch with dynamic dimensions")
     mask = batch.mask + (1 - batch.mask)
-    return MaskedBatch(batch.data, mask, batch.dims, False)
+    return MaskedBatch(batch.data, mask, batch.dims)
 
 MaskedBatch._synchronize = _synchronize
 Variable._synchronize = _synchronize
 
-def _accumulate(batch, new):
+def _update(batch, new):
     if not isinstance(batch, MaskedBatch) and not isinstance(new, MaskedBatch):
         return new
-    return batch * (1 - new.mask) + new * new.mask
+    if isinstance(batch, MaskedBatch):
+        data = torch.where(new.mask, new.data, batch.data)
+    else:
+        data = torch.where(new.mask, new.data, batch)
+    mask = new.mask
+    dims = new.dims
+    return MaskedBatch(data, mask, dims)
 
-MaskedBatch._accumulate = _accumulate
-Variable._accumulate = _accumulate
+MaskedBatch._update = _update
+Variable._update = _update
 
 # def _for(closure, iterator):
 #     for i in iterator:
@@ -422,18 +400,3 @@ torch.nn.modules.dropout.F = sys.modules[__name__]
 
 import torch.nn._functions.rnn
 torch.nn._functions.rnn.F = sys.modules[__name__]
-
-#import torch.nn.modules.rnn
-def lstm_cell(input, hidden, w_ih, w_hh, b_ih=None, b_hh=None):
-    if not isinstance(hidden[0], MaskedBatch):
-        return torch.nn._functions.rnn.LSTMCell(
-            input, hidden, w_ih, w_hh, b_ih, b_hh)
-    else:
-        hdata, cdata = torch.nn._functions.rnn.LSTMCell(
-            input, hidden, w_ih, w_hh, b_ih, b_hh)
-        if hidden[0].accumulating:
-            hdata = hdata * hidden[0].mask + hidden[0].data * (1 - hidden[0].mask)
-            cdata = cdata * hidden[1].mask + hidden[1].data * (1 - hidden[1].mask)
-        return (MaskedBatch(hdata, input.mask, input.dims, hidden[0].accumulating),
-                MaskedBatch(cdata, input.mask, input.dims, hidden[1].accumulating))
-torch.nn.backends.thnn.backend.function_classes['LSTMCell'] = lstm_cell

@@ -2,18 +2,15 @@ import torch
 
 class MaskedBatch(object):
 
-    def __init__(self, data, mask, dims, accumulating=None):
+    def __init__(self, data, mask, dims):
         if data.dim() != mask.dim() or mask.dim() != len(dims) + 1:
             raise ValueError("malformed MaskedBatch {} with:\n data: {}\n mask: {}".format(
                 repr(dims), repr(data), repr(mask)))
         if isinstance(mask, torch.autograd.Variable) and mask.requires_grad:
             raise ValueError("mask cannot require grad")
-        if accumulating is None:
-            accumulating = not any(dims)
         self.data = data
         self.mask = mask
         self.dims = dims
-        self.accumulating = accumulating
 
     @classmethod
     def fromlist(cls, examples, dims):
@@ -39,14 +36,13 @@ class MaskedBatch(object):
             yield data[(slice(i, i + 1), *inds)]
 
     def __repr__(self):
-        return "{}MaskedBatch {} with:\n data: {}\n mask: {}".format(
-            "accumulating " if self.accumulating else "",
+        return "MaskedBatch {} with:\n data: {}\n mask: {}".format(
             repr(self.dims), repr(self.data), repr(self.mask))
 
-    def cuda(self):
-        data = self.data.cuda()
-        mask = self.mask.cuda()
-        return self.__class__(data, mask, self.dims, self.accumulating)
+    def cuda(self, *args, **kwargs):
+        data = self.data.cuda(*args, **kwargs)
+        mask = self.mask.cuda(*args, **kwargs)
+        return self.__class__(data, mask, self.dims)
 
     @property
     def is_cuda(self):
@@ -77,6 +73,10 @@ if torch.__version__ < '0.4':
             return torch.autograd.Variable(t)
         return inner
     torch.autograd.Variable.new = _var_method('new')
+
+    def _where(cond, x, y):
+        return x * cond + y * (1 - cond)
+    torch.where = _where
 
     _old_arange = torch.arange
     def _new_arange(*args, out=None):
