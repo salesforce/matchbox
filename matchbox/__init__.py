@@ -94,3 +94,6 @@ if torch.__version__ < '0.4':
 
 from . import functional
 from . import data
+from . import recompile
+from . import macro
+from .macro import wrap
