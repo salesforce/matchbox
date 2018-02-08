@@ -1,7 +1,7 @@
 import astor
 import gast
 
-from .recompile import compile_function
+from .recompile import compile_function, code_to_ast
 
 class FuseAttributes(gast.NodeTransformer):
     def visit_Attribute(self, node):
@@ -51,11 +51,11 @@ class LoopAccumulation(gast.NodeTransformer):
                     if name in stores:
                         raise NotImplementedError("cannot process LCD "
                                                   "stored to twice")
-                    # $var = $expr -> $var = $var.accumulate($expr)
+                    # $var = $expr -> $var = $var._update($expr)
                     child.value = gast.Call(
                         gast.Attribute(
                             gast.Name(name, gast.Load(), None),
-                            gast.Name('_accumulate', gast.Load(), None),
+                            gast.Name('_update', gast.Load(), None),
                             None),
                         [child.value], [])
                     stores.add(name)
@@ -74,6 +74,6 @@ class LoopAccumulation(gast.NodeTransformer):
         return [node] + synchronizes
 
 def wrap(fn):
-    node = gast.ast_to_gast(astor.code_to_ast(fn))
+    node = code_to_ast(fn)
     node = LoopAccumulation().visit(node)
     return compile_function(node)
