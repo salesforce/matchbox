@@ -196,7 +196,11 @@ def split(batch, split_size_or_sections, dim=0):
     if dim < 0:
         dim += batch.dim()
     if dim > 0 and batch.dims[dim - 1]:
-        raise ValueError("cannot split along dynamic dimension")
+        for data, mask in zip(
+                torch.split(batch.data, split_size_or_sections, dim),
+                torch.split(batch.mask, split_size_or_sections, dim)):
+            yield MaskedBatch(data, mask, batch.dims)
+        return
     for data in torch.split(batch.data, split_size_or_sections, dim):
         yield MaskedBatch(data, batch.mask, batch.dims)
 
@@ -205,9 +209,7 @@ MaskedBatch.split = split
 def chunk(batch, chunks, dim=0):
     if dim < 0:
         dim += batch.dim()
-    if dim > 0 and batch.dims[dim - 1]:
-        raise ValueError("cannot chunk along dynamic dimension")
-    split_size = (batch.size(dim) + chunks - 1) // chunks
+    split_size = (batch.maxsize(dim) + chunks - 1) // chunks
     return split(batch, split_size, dim)
 
 MaskedBatch.chunk = chunk
