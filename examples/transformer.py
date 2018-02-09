@@ -220,9 +220,12 @@ if __name__ == '__main__':
     import sys
     unbatch = sys.argv[1] == '1'
     small = sys.argv[2] == '1'
-    TEXT = MaskedBatchField(batch_first=True)
+    if sys.argv[3] == '1':
+        TEXT = data.Field(batch_first=True)
+    else:
+        TEXT = MaskedBatchField(batch_first=True)
     train, dev, test = datasets.IWSLT.splits(('.de', '.en'), (TEXT, TEXT))
-    TEXT.build_vocab(train)
+    TEXT.build_vocab(train, max_size=50000)
     random.seed(0)
     torch.manual_seed(0)
     train_iter = data.BucketIterator(
