@@ -1,10 +1,15 @@
 import torch
 from torch import nn
+from torchtext import data, datasets
+
 import matchbox
 from matchbox import functional as F
 from matchbox.data import MaskedBatchField
 
+import argparse
 import math
+import random
+import time
 
 def positional_encodings_like(x, t=None):
     T, D = x.maxsize(-2), x.maxsize(-1)
@@ -171,7 +176,7 @@ class Decoder(nn.Module):
 
         for l, (layer, enc) in enumerate(zip(self.layers, encoding)):
             x = layer(x, enc)
-        return x
+        return self.out(x)
 
 class Transformer(nn.Module):
 
@@ -196,9 +201,33 @@ class Transformer(nn.Module):
                 output = self.decoder.beam_search(encoding, beam, alpha)
 
             if return_probs:
-                return output, out, self.decoder.out(out).softmax()
+                return output, out
             return output
 
-        if return_probs:
-            return out, F.softmax(self.decoder.out(out))
         return out
+
+    def loss(self, batch, reduce=True):
+        logits = self(batch.src, batch.trg[:, :-1])
+        return F.cross_entropy(logits, batch.trg[:, 1:], reduce=reduce)
+
+if __name__ == '__main__':
+    TEXT = MaskedBatchField(batch_first=True)
+    train, dev, test = datasets.IWSLT.splits(('.de', '.en'), (TEXT, TEXT))
+    TEXT.build_vocab(train)
+    random.seed(0)
+    torch.manual_seed(0)
+    train_iter = data.BucketIterator(
+        train, batch_size=32, device=0 if torch.cuda.is_available() else -1)
+    args = argparse.Namespace()
+    args.__dict__.update(d_model=512, d_hidden=2048, n_heads=8, drop_ratio=0,
+                         n_layers=6, length_ratio=1.5)
+    model = Transformer(TEXT, TEXT, args)
+    for i, b in enumerate(train_iter):
+        if i == 1:
+            t = time.time()
+        if i == 2:
+            print(time.time() - t)
+            break
+        model.zero_grad()
+        loss = model.loss(b)
+        loss.backward()
