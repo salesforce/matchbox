@@ -337,7 +337,7 @@ def split_dim(batch, dim, split_by):
 MaskedBatch.split_dim = split_dim
 Variable.split_dim = split_dim
 
-def combine_dims(batch, dim1, dim2):
+def join_dims(batch, dim1, dim2):
     if dim1 < 0:
         dim1 += batch.dim()
     if dim2 < 0:
@@ -366,8 +366,8 @@ def combine_dims(batch, dim1, dim2):
     dims = batch.dims[:dim1] + batch.dims[dim1 + 1:]
     return MaskedBatch(data, mask, dims)
 
-MaskedBatch.combine_dims = combine_dims
-Variable.combine_dims = combine_dims
+MaskedBatch.join_dims = join_dims
+Variable.join_dims = join_dims
 
 def causal_mask(batch, in_dim, out_dim):
     '''if in_dim is indexed by i and out_dim by j, masks ret[i,j] where i > j'''
