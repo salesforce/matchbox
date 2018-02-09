@@ -3,7 +3,7 @@ from torch.autograd import Variable
 from torch import nn
 import matchbox
 from matchbox import functional as F
-from matchbox import MaskedBatch, wrap
+from matchbox import MaskedBatch, batch
 from matchbox.test_utils import mb_test, mb_assert
 
 import random
@@ -11,7 +11,7 @@ import random
 def test_rnn_cell():
     mb_test(nn.RNNCell(2, 2), (4, (False, 2)), (4, (False, 2)))
 
-@wrap
+@batch
 def simple_rnn(x, h0, cell):
     h = h0
     for xt in x.unbind(1):
@@ -30,7 +30,7 @@ class RNNClass(nn.Module):
     def __init__(self, cell):
         super().__init__()
         self.cell = cell
-    @wrap
+    @batch
     def forward(self, x, h0=None):
         h = x.new(1, x.size(-1)).zero_() if h0 is None else h0
         for xt in x.unbind(1):
@@ -45,7 +45,7 @@ class LSTMClass(nn.Module):
     def __init__(self, in_size, out_size):
         super().__init__()
         self.cell = nn.LSTMCell(in_size, out_size)
-    @wrap
+    @batch
     def forward(self, x, h0=None, c0=None):
         h = x.new(1, x.size(-1)).zero_() if h0 is None else h0
         c = x.new(1, x.size(-1)).zero_() if c0 is None else c0
@@ -64,7 +64,7 @@ class BiLSTMClass(nn.Module):
         super().__init__()
         self.fcell = nn.LSTMCell(in_size, out_size)
         self.rcell = nn.LSTMCell(in_size, out_size)
-    @wrap
+    @batch
     def forward(self, x, h0=None, c0=None):
         hf = x.new(1, x.size(-1)).zero_() if h0 is None else h0
         cf = x.new(1, x.size(-1)).zero_() if c0 is None else c0
@@ -89,7 +89,7 @@ class AccumRNNClass(nn.Module):
         super().__init__()
         self.cell = cell
         self.dynamic = dynamic
-    @wrap
+    @batch
     def forward(self, x, h0=None):
         h = x.new(1, x.size(-1)).zero_() if h0 is None else h0
         encoding = []

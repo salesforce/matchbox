@@ -34,7 +34,8 @@ class LoopAccumulation(gast.NodeTransformer):
         return self.visit_loop(node)
     def visit_FunctionDef(self, node):
         self.generic_visit(node)
-        node.decorator_list = [d for d in node.decorator_list if d.id != 'wrap']
+        node.decorator_list = [d for d in node.decorator_list
+                               if d.id != 'batch']
         return node
     def visit_loop(self, node):
         node = FuseAttributes().visit(node)
@@ -75,7 +76,7 @@ class LoopAccumulation(gast.NodeTransformer):
         node.body.extend(synchronizes)
         return node
 
-def wrap(fn):
+def batch(fn):
     node = code_to_ast(fn)
     node = LoopAccumulation().visit(node)
     return compile_function(node, fn.__globals__)

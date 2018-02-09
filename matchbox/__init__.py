@@ -96,4 +96,4 @@ from . import functional
 from . import data
 from . import recompile
 from . import macro
-from .macro import wrap
+from .macro import batch
