@@ -15,7 +15,7 @@ def mb_rand(*dims):
 
 def mb_assert_allclose(xs, ybs):
     if isinstance(ybs, Variable):
-        np.testing.assert_allclose(xs.data.numpy(), ybs.data.numpy(), rtol=1e-4)
+        np.testing.assert_allclose(xs.data.numpy(), ybs.data.numpy(), rtol=1e-3)
     elif isinstance(ybs, MaskedBatch):
         mb_assert_allclose(xs, ybs.examples())
     else:

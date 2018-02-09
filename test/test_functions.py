@@ -8,7 +8,7 @@ from matchbox.test_utils import mb_test, mb_assert
 import random
 
 def test_embedding():
-    xs = [Variable(torch.rand(1, random.randint(1, 3)).mul_(5).long())
+    xs = [Variable(torch.LongTensor(1, random.randint(1, 3)).random_(5))
           for i in range(4)]
     W = Variable(torch.rand(5, 2))
     xb = MaskedBatch.fromlist(xs, (True,))
