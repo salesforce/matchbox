@@ -212,19 +212,21 @@ def chunk(batch, chunks, dim=0):
 MaskedBatch.chunk = chunk
 
 def cat(sequence, dim):
+    sequence = list(sequence)
     if len(sequence) == 0:
         raise ValueError("cannot stack empty sequence")
     first = sequence[0]
     if not isinstance(first, MaskedBatch):
         return torch.cat(sequence, dim)
     data = torch.cat([batch.data for batch in sequence], dim)
-    if dynamic:
+    if first.dims[dim - 1]:
         mask = torch.cat([batch.mask for batch in sequence], dim)
     else:
         mask = first.mask
     return MaskedBatch(data, mask, first.dims)
 
 def stack(sequence, dim, dynamic=None):
+    sequence = list(sequence)
     if len(sequence) == 0:
         raise ValueError("cannot stack empty sequence")
     first = sequence[0]
