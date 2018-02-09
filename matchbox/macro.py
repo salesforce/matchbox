@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import astor
 import gast
 
@@ -36,11 +38,11 @@ class LoopAccumulation(gast.NodeTransformer):
         return node
     def visit_loop(self, node):
         node = FuseAttributes().visit(node)
-        loads, stores = set(), set()
+        loads, stores = defaultdict(list), set()
         for child in node.body:
             for n in gast.walk(child):
                 if isinstance(n, gast.Name) and isinstance(n.ctx, gast.Load):
-                    loads.add(n.id)
+                    loads[n.id].append(n)
             if isinstance(child, gast.Assign):
                 if len(child.targets) > 1:
                     raise NotImplementedError("cannot process LCD that is "
@@ -70,9 +72,10 @@ class LoopAccumulation(gast.NodeTransformer):
                         None),
                     [], []))
             synchronizes.append(synchronize)
-        return [node] + synchronizes
+        node.body.extend(synchronizes)
+        return node
 
 def wrap(fn):
     node = code_to_ast(fn)
     node = LoopAccumulation().visit(node)
-    return compile_function(node)
+    return compile_function(node, fn.__globals__)
