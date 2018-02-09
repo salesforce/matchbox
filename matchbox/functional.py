@@ -69,7 +69,8 @@ Variable.softmax = softmax
 def cross_entropy(input, target, weight=None, size_average=True,
                   ignore_index=-1, reduce=True):
     if not isinstance(input, MaskedBatch) and not isinstance(target, MaskedBatch):
-        ret = F.cross_entropy(input.view(-1, input.size(-1)), target.view(-1),
+        ret = F.cross_entropy(input.contiguous().view(-1, input.size(-1)),
+                              target.contiguous().view(-1),
                               weight, size_average, ignore_index, reduce)
         if reduce: return ret
         return ret.view(input.size(0), input.size(1))

@@ -206,11 +206,20 @@ class Transformer(nn.Module):
 
         return out
 
-    def loss(self, batch, reduce=True):
+    def loss(self, batch, reduce=True, unbatch=False):
+        if unbatch:
+            loss = 0
+            for src, trg in zip(batch.src.examples(), batch.trg.examples()):
+                logits = self(src, trg[:, :-1])
+                loss += F.cross_entropy(logits, trg[:, 1:], reduce=reduce)
+            return loss
         logits = self(batch.src, batch.trg[:, :-1])
         return F.cross_entropy(logits, batch.trg[:, 1:], reduce=reduce)
 
 if __name__ == '__main__':
+    import sys
+    unbatch = sys.argv[1] == '1'
+    small = sys.argv[2] == '1'
     TEXT = MaskedBatchField(batch_first=True)
     train, dev, test = datasets.IWSLT.splits(('.de', '.en'), (TEXT, TEXT))
     TEXT.build_vocab(train)
@@ -219,9 +228,10 @@ if __name__ == '__main__':
     train_iter = data.BucketIterator(
         train, batch_size=32, device=0 if torch.cuda.is_available() else -1)
     args = argparse.Namespace()
-    args.__dict__.update(d_model=512, d_hidden=2048, n_heads=8, drop_ratio=0,
+    args.__dict__.update(d_model=8 if small else 512, d_hidden=1 if small else 2048, n_heads=8, drop_ratio=0,
                          n_layers=6, length_ratio=1.5)
     model = Transformer(TEXT, TEXT, args)
+    if torch.cuda.is_available(): model.cuda()
     for i, b in enumerate(train_iter):
         if i == 1:
             t = time.time()
@@ -229,5 +239,5 @@ if __name__ == '__main__':
             print(time.time() - t)
             break
         model.zero_grad()
-        loss = model.loss(b)
+        loss = model.loss(b, unbatch=unbatch)
         loss.backward()
