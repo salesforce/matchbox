@@ -66,6 +66,12 @@ class MaskedBatch(object):
         #     raise NotImplementedError
         return self.data.new(*sizes)
 
+from . import functional
+from . import data
+from . import recompile
+from . import macro
+from .macro import batch
+
 if torch.__version__ < '0.4':
     def _var_method(method_name):
         def inner(self, *args, **kwargs):
@@ -87,13 +93,7 @@ if torch.__version__ < '0.4':
     torch.arange = _new_arange
 
     def embed_forward(self, input):
-        return torch.nn.functional.embedding(
+        return functional.embedding(
             input, self.weight, self.padding_idx, self.max_norm,
             self.norm_type, self.scale_grad_by_freq, self.sparse)
     torch.nn.Embedding.forward = embed_forward
-
-from . import functional
-from . import data
-from . import recompile
-from . import macro
-from .macro import batch
