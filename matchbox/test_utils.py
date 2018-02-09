@@ -19,7 +19,7 @@ def mb_assert_allclose(xs, ybs):
     elif isinstance(ybs, MaskedBatch):
         mb_assert_allclose(xs, ybs.examples())
     else:
-        if isinstance(ybs, list):
+        if isinstance(ybs, (list, tuple)):
             for j, yb in enumerate(ybs):
                 for i, y in enumerate(yb.examples()):
                     mb_assert_allclose(xs[i][j], y)
