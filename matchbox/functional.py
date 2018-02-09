@@ -66,7 +66,7 @@ def softmax(batch, dim=-1):
 MaskedBatch.softmax = softmax
 Variable.softmax = softmax
 
-def matmul(batch1, batch2, out=None):
+def matmul(batch1, batch2):
     if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
         return F.matmul(batch1, batch2)
     if isinstance(batch1, MaskedBatch) and isinstance(batch2, MaskedBatch):
@@ -79,8 +79,6 @@ def matmul(batch1, batch2, out=None):
         if dims2 == 1 and dims1 == 1:
             data2 = data2.unsqueeze(-1)
         data = data1 @ data2
-        if out is not None:
-            raise NotImplementedError("matmul with out argument not implemented")
         if dims1 == 1 and dims2 == 1:
             #if (batch1.dims[0] or batch2.dims[0]) and not batch1.mask.eq(batch2.mask).all():
             #    raise ValueError("cannot contract non-matching dimensions")
@@ -119,6 +117,10 @@ def _elementwise_unary(fn):
         return MaskedBatch(data, mask, dims)
     return inner
 
+MaskedBatch.relu = relu = _elementwise_unary(F.relu)
+MaskedBatch.tanh = tanh = _elementwise_unary(F.tanh)
+MaskedBatch.sigmoid = sigmoid = _elementwise_unary(F.sigmoid)
+
 def _elementwise_binary(fn):
     def inner(batch1, batch2, **kwargs):
         if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
@@ -133,10 +135,6 @@ def _elementwise_binary(fn):
             dims = batch1.dims
         return MaskedBatch(data, mask, dims)
     return inner
-
-MaskedBatch.relu = relu = _elementwise_unary(F.relu)
-MaskedBatch.tanh = tanh = _elementwise_unary(F.tanh)
-MaskedBatch.sigmoid = sigmoid = _elementwise_unary(F.sigmoid)
 
 MaskedBatch.__add__ = _elementwise_binary(torch.add)
 MaskedBatch.__sub__ = _elementwise_binary(lambda a, b: a - b)
@@ -156,17 +154,18 @@ def _reduce(fn, zero_preserving=False):
             if dim < 0:
                 dim += batch.dim()
             if not zero_preserving and batch.dims[dim - 1]:
-                raise NotImplementedError(
-                    "cannot reduce over dynamic dim with non-zero-preserving kernel")
+                raise NotImplementedError("cannot reduce over dynamic dim "
+                                          "with non-zero-preserving kernel")
             if keepdim:
                 mask = batch.mask[tuple(slice(0, 1) if i == dim else slice(None)
                                         for i in range(batch.mask.dim()))]
-                dims = tuple(
-                    False if i == dim - 1 else d for i, d in enumerate(batch.dims))
+                dims = tuple(False if i == dim - 1 else d
+                             for i, d in enumerate(batch.dims))
             else:
                 mask = batch.mask[tuple(0 if i == dim else slice(None)
                                         for i in range(batch.mask.dim()))]
-                dims = tuple(d for i, d in enumerate(batch.dims) if i != dim - 1)
+                dims = tuple(d for i, d in enumerate(batch.dims)
+                             if i != dim - 1)
         data = fn(batch.data * batch.mask, dim=dim, keepdim=keepdim)
         return MaskedBatch(data, mask, dims)
     return inner
@@ -183,7 +182,8 @@ def getitem(batch, index):
     data = batch.data[index]
     mask = batch.mask[tuple(i if b else 0 if isinstance(i, int) else slice(None)
                        for i, b in zip(index, (True,) + batch.dims))]
-    dims = tuple(b for i, b in zip(index[1:] + (slice(None),) * len(batch.dims), batch.dims)
+    dims = tuple(b for i, b in zip(index[1:] + (slice(None),) * len(batch.dims),
+                                   batch.dims)
                  if not isinstance(i, int)) # could be faster
     return MaskedBatch(data, mask, dims)
 
@@ -191,18 +191,15 @@ MaskedBatch.__getitem__ = getitem
 
 def split(batch, split_size_or_sections, dim=0):
     if not isinstance(batch, MaskedBatch):
-        yield from torch.split(batch, split_size_or_sections, dim)
-        return
+        return torch.split(batch, split_size_or_sections, dim)
     if dim < 0:
         dim += batch.dim()
     if dim > 0 and batch.dims[dim - 1]:
-        for data, mask in zip(
-                torch.split(batch.data, split_size_or_sections, dim),
-                torch.split(batch.mask, split_size_or_sections, dim)):
-            yield MaskedBatch(data, mask, batch.dims)
-        return
-    for data in torch.split(batch.data, split_size_or_sections, dim):
-        yield MaskedBatch(data, batch.mask, batch.dims)
+        return tuple(MaskedBatch(data, mask, batch.dims) for data, mask in zip(
+            torch.split(batch.data, split_size_or_sections, dim),
+            torch.split(batch.mask, split_size_or_sections, dim)))
+    return tuple(MaskedBatch(data, batch.mask, batch.dims) for data
+                 in torch.split(batch.data, split_size_or_sections, dim))
 
 MaskedBatch.split = split
 
@@ -214,20 +211,52 @@ def chunk(batch, chunks, dim=0):
 
 MaskedBatch.chunk = chunk
 
+def cat(sequence, dim):
+    if len(sequence) == 0:
+        raise ValueError("cannot stack empty sequence")
+    first = sequence[0]
+    if not isinstance(first, MaskedBatch):
+        return torch.cat(sequence, dim)
+    data = torch.cat([batch.data for batch in sequence], dim)
+    if dynamic:
+        mask = torch.cat([batch.mask for batch in sequence], dim)
+    else:
+        mask = first.mask
+    return MaskedBatch(data, mask, first.dims)
+
+def stack(sequence, dim, dynamic=None):
+    if len(sequence) == 0:
+        raise ValueError("cannot stack empty sequence")
+    first = sequence[0]
+    if not isinstance(first, MaskedBatch):
+        return torch.stack(sequence, dim)
+    if dim < 0:
+        dim += first.dim() + 1
+    if dynamic is None:
+        dynamic = not first.mask.eq(sequence[-1].mask).all()
+    data = torch.cat([batch.data.unsqueeze(dim) for batch in sequence], dim)
+    if dynamic:
+        mask = torch.cat(
+            [batch.mask.unsqueeze(dim) for batch in sequence], dim)
+    else:
+        mask = first.mask.unsqueeze(dim)
+    dims = first.dims[:dim - 1] + (dynamic,) + first.dims[dim - 1:]
+    return MaskedBatch(data, mask, dims)
+
 def unbind(batch, dim):
     if not isinstance(batch, MaskedBatch):
-        yield from torch.unbind(batch, dim)
-        return
+        return torch.unbind(batch, dim)
     if dim == 0:
         raise ValueError("cannot unbind over batch dimension")
     dims = tuple(b for d, b in enumerate(batch.dims) if d != dim - 1)
     if batch.dims[dim - 1]:
-        for data, mask in zip(torch.unbind(batch.data, dim), torch.unbind(batch.mask, dim)):
-            yield MaskedBatch(data, mask, dims)
+        return tuple(MaskedBatch(data, mask, dims)
+                     for data, mask in zip(torch.unbind(batch.data, dim),
+                                           torch.unbind(batch.mask, dim)))
     else:
         mask = batch.mask.squeeze(dim)
-        for data in torch.unbind(batch.data, dim):
-            yield MaskedBatch(data, mask, dims)
+        return tuple(MaskedBatch(data, mask, dims)
+                     for data in torch.unbind(batch.data, dim))
 
 MaskedBatch.unbind = unbind
 Variable.unbind = unbind
