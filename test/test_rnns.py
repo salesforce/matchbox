@@ -103,3 +103,27 @@ def test_accum_rnn_class():
             (4, (True, 3), (False, 2)))
     mb_test(AccumRNNClass(nn.RNNCell(2, 2), True),
             (4, (True, 3), (False, 2)))
+
+class AccumBiRNNClass(nn.Module):
+    def __init__(self, size):
+        super().__init__()
+        self.fwd = nn.RNNCell(size, size)
+        self.bwd = nn.RNNCell(size, size)
+    @batch
+    def forward(self, x):
+        h = h0 = x.new(1, x.size(-1)).zero_()
+        fwd, bwd = [], []
+        for xt in x.unbind(1):
+            h = self.fwd(xt, h)
+            fwd.append(h)
+        fwd = F.stack(fwd, 1)
+        h = h0
+        for xt in reversed(x.unbind(1)):
+            h = self.bwd(xt, h)
+            bwd.append(h)
+        bwd = F.stack(reversed(bwd), 1)
+        return F.cat((fwd, bwd), 2)
+
+def test_accum_birnn_class():
+    mb_test(AccumBiRNNClass(1),
+            (4, (True, 3), (False, 1)))
