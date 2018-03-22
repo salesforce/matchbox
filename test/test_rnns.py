@@ -32,7 +32,7 @@ class RNNClass(nn.Module):
         self.cell = cell
     @batch
     def forward(self, x, h0=None):
-        h = x.new(1, x.size(-1)).zero_() if h0 is None else h0
+        h = x.new(x.size(0), x.size(-1)).zero_() if h0 is None else h0
         for xt in x.unbind(1):
             h = self.cell(xt, h)
         return h
@@ -47,8 +47,8 @@ class LSTMClass(nn.Module):
         self.cell = nn.LSTMCell(in_size, out_size)
     @batch
     def forward(self, x, h0=None, c0=None):
-        h = x.new(1, x.size(-1)).zero_() if h0 is None else h0
-        c = x.new(1, x.size(-1)).zero_() if c0 is None else c0
+        h = x.new(x.size(0), x.size(-1)).zero_() if h0 is None else h0
+        c = x.new(x.size(0), x.size(-1)).zero_() if c0 is None else c0
         for xt in x.unbind(1):
             state = self.cell(xt, (h, c))
             h = state[0]
@@ -66,14 +66,14 @@ class BiLSTMClass(nn.Module):
         self.rcell = nn.LSTMCell(in_size, out_size)
     @batch
     def forward(self, x, h0=None, c0=None):
-        hf = x.new(1, x.size(-1)).zero_() if h0 is None else h0
-        cf = x.new(1, x.size(-1)).zero_() if c0 is None else c0
+        hf = x.new(x.size(0), x.size(-1)).zero_() if h0 is None else h0
+        cf = x.new(x.size(0), x.size(-1)).zero_() if c0 is None else c0
         for xt in x.unbind(1):
             state = self.fcell(xt, (hf, cf))
             hf = state[0]
             cf = state[1]
-        hr = x.new(1, x.size(-1)).zero_() if h0 is None else h0
-        cr = x.new(1, x.size(-1)).zero_() if c0 is None else c0
+        hr = x.new(x.size(0), x.size(-1)).zero_() if h0 is None else h0
+        cr = x.new(x.size(0), x.size(-1)).zero_() if c0 is None else c0
         for xt in reversed(x.unbind(1)):
             state = self.rcell(xt, (hr, cr))
             hr = state[0]
@@ -91,7 +91,7 @@ class AccumRNNClass(nn.Module):
         self.dynamic = dynamic
     @batch
     def forward(self, x, h0=None):
-        h = x.new(1, x.size(-1)).zero_() if h0 is None else h0
+        h = x.new(x.size(0), x.size(-1)).zero_() if h0 is None else h0
         encoding = []
         for xt in x.unbind(1):
             h = self.cell(xt, h)
@@ -111,7 +111,7 @@ class AccumBiRNNClass(nn.Module):
         self.bwd = nn.RNNCell(size, size)
     @batch
     def forward(self, x):
-        h = h0 = x.new(1, x.size(-1)).zero_()
+        h = h0 = x.new(x.size(0), x.size(-1)).zero_()
         fwd, bwd = [], []
         for xt in x.unbind(1):
             h = self.fwd(xt, h)
