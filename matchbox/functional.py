@@ -131,7 +131,7 @@ def _elementwise_unary(fn):
         if not isinstance(batch, MaskedBatch):
             return fn(batch, **kwargs)
         data = fn(batch.data, **kwargs)
-        mask = batch.mask
+        mask = batch.mask.type_as(data)
         dims = batch.dims
         return MaskedBatch(data, mask, dims)
     return inner
@@ -145,12 +145,12 @@ def _elementwise_binary(fn):
         if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
             return fn(batch1, batch2, **kwargs)
         if isinstance(batch2, MaskedBatch):
-            mask = batch1.mask * batch2.mask
             data = fn(batch1.data, batch2.data, **kwargs)
+            mask = batch1.mask * batch2.mask
             dims = tuple(b1 or b2 for b1, b2 in zip(batch1.dims, batch2.dims))
         else:
-            mask = batch1.mask
             data = fn(batch1.data, batch2, **kwargs)
+            mask = batch1.mask.type_as(data)
             dims = batch1.dims
         return MaskedBatch(data, mask, dims)
     return inner
@@ -310,7 +310,7 @@ def view(batch, *sizes):
                                for i in range(1, len(args)))
     mask = batch.mask.view(*mask_sizes) # TODO can this throw if data doesn't?
     dims = tuple(sizes[i] == -1 for i in range(1, len(args)))
-    return MaskedBatch(data, mask, dims, batch)
+    return MaskedBatch(data, mask, dims)
 
 MaskedBatch.view = view
 
