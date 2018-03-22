@@ -160,10 +160,17 @@ MaskedBatch.__sub__ = _elementwise_binary(lambda a, b: a - b)
 MaskedBatch.__mul__ = _elementwise_binary(torch.mul)
 MaskedBatch.__truediv__ = _elementwise_binary(torch.div)
 
+MaskedBatch.__lt__ = _elementwise_binary(torch.lt)
+MaskedBatch.__le__ = _elementwise_binary(torch.le)
+MaskedBatch.__eq__ = _elementwise_binary(torch.eq)
+MaskedBatch.__ne__ = _elementwise_binary(torch.ne)
+MaskedBatch.__gt__ = _elementwise_binary(torch.gt)
+MaskedBatch.__ge__ = _elementwise_binary(torch.ge)
+
 def _reduce(fn, zero_preserving=False):
     def inner(batch, dim=None, keepdim=False):
         if dim is None:
-            if not zero_preserving and any(batch.dims):
+            if not zero_preserving and __builtins__['any'](batch.dims):
                 raise NotImplementedError(
                     "cannot reduce to scalar with non-zero-preserving kernel "
                     "if dynamic dims present")
@@ -192,6 +199,16 @@ def _reduce(fn, zero_preserving=False):
 MaskedBatch.sum = _reduce(torch.sum, zero_preserving=True)
 MaskedBatch.mean = _reduce(torch.mean)
 MaskedBatch.std = _reduce(torch.std)
+
+def any(batch):
+    return (batch.data * batch.mask).any()
+
+MaskedBatch.any = any
+
+def all(batch):
+    return (batch.data * batch.mask).all()
+
+MaskedBatch.all = all
 
 def getitem(batch, index):
     if not isinstance(index, tuple) or index[0] != slice(None):
@@ -436,7 +453,7 @@ Variable.maxsize = maxsize
 def _synchronize(batch):
     if not isinstance(batch, MaskedBatch):
         return batch
-    if any(batch.dims):
+    if __builtins__['any'](batch.dims):
         raise ValueError("cannot synchronize batch with dynamic dimensions")
     mask = batch.mask + (1 - batch.mask)
     return MaskedBatch(batch.data, mask, batch.dims)
