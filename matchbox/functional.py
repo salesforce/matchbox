@@ -448,9 +448,9 @@ def _update(batch, new):
     if not isinstance(batch, MaskedBatch) and not isinstance(new, MaskedBatch):
         return new
     if isinstance(batch, MaskedBatch):
-        data = torch.where(new.mask, new.data, batch.data)
+        data = torch.where(new.mask.byte(), new.data, batch.data)
     else:
-        data = torch.where(new.mask, new.data, batch)
+        data = torch.where(new.mask.byte(), new.data, batch)
     mask = new.mask
     dims = new.dims
     return MaskedBatch(data, mask, dims)
