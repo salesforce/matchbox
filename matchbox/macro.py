@@ -31,13 +31,18 @@ class LoopAccumulation(gast.NodeTransformer):
         return self.visit_loop(node)
     def visit_While(self, node):
         self.generic_visit(node)
-        return self.visit_loop(node)
+        if len(node.orelse) > 0:
+            raise NotImplementedError("cannot process while-else")
+        test = node.test
+        node.test = gast.Call(gast.Attribute(
+            test, gast.Name('any', gast.Load(), None), None), [], [])
+        return self.visit_loop(node, test)
     def visit_FunctionDef(self, node):
         self.generic_visit(node)
         node.decorator_list = [d for d in node.decorator_list
                                if d.id != 'batch']
         return node
-    def visit_loop(self, node):
+    def visit_loop(self, node, update_mask=gast.NameConstant(value=None)):
         node = FuseAttributes().visit(node)
         loads, stores = defaultdict(list), set()
         for child in node.body:
@@ -59,7 +64,7 @@ class LoopAccumulation(gast.NodeTransformer):
                             gast.Name(name, gast.Load(), None),
                             gast.Name('_update', gast.Load(), None),
                             None),
-                        [child.value], [])
+                        [child.value, update_mask], [])
                     stores.add(name)
         node = SplitAttributes().visit(node)
         synchronizes = []

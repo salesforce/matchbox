@@ -461,16 +461,16 @@ def _synchronize(batch):
 MaskedBatch._synchronize = _synchronize
 Variable._synchronize = _synchronize
 
-def _update(batch, new):
+def _update(batch, new, update_mask=None):
     if not isinstance(batch, MaskedBatch) and not isinstance(new, MaskedBatch):
         return new
+    update_mask = (new.mask.byte() if update_mask is None
+                   else update_mask.data * update_mask.mask)
     if isinstance(batch, MaskedBatch):
-        data = torch.where(new.mask.byte(), new.data, batch.data)
+        data = torch.where(update_mask, new.data, batch.data)
     else:
-        data = torch.where(new.mask.byte(), new.data, batch)
-    mask = new.mask
-    dims = new.dims
-    return MaskedBatch(data, mask, dims)
+        data = torch.where(update_mask, new.data, batch)
+    return MaskedBatch(data, update_mask.type_as(data), new.dims)
 
 MaskedBatch._update = _update
 Variable._update = _update
