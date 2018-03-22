@@ -8,6 +8,7 @@ import random
 import numpy as np
 
 def mb_rand(*dims):
+    dims = [dim for dim in dims if dim != ()]
     xs = [Variable(torch.rand(1, *(random.randint(1, size) if b else size
                   for b, size in dims[1:]))) for i in range(dims[0])]
     xb = MaskedBatch.fromlist(xs, tuple(b for b, d in dims[1:]))
