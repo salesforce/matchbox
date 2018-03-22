@@ -16,13 +16,14 @@ class MaskedBatch(object):
     def fromlist(cls, examples, dims):
         # TODO do some validation
         bs = len(examples)
-        sizes = [max(x.size(d + 1) for x in examples) for d in range(len(dims))]
+        sizes = [max(x.maxsize(d + 1) for x in examples)
+                 for d in range(len(dims))]
         data = examples[0].new(bs, *sizes).zero_()
         mask_sizes = [s if dims[d] else 1 for d, s in enumerate(sizes)]
         mask = examples[0].new(bs, *mask_sizes).zero_()
         mask.requires_grad = False
         for i, x in enumerate(examples):
-            inds = [slice(0, x.size(d + 1)) if b else slice(None)
+            inds = [slice(0, x.maxsize(d + 1)) if b else slice(None)
                     for d, b in enumerate(dims)]
             data[(slice(i, i + 1), *inds)] = x
             mask[(slice(i, i + 1), *inds)] = 1
@@ -30,9 +31,10 @@ class MaskedBatch(object):
 
     def examples(self):
         data, mask, dims = self.data, self.mask.data.long(), self.dims
-        for i in range(data.size(0)):
-            inds = tuple(slice(0, mask[i].sum(d, keepdim=True)[tuple(0 for _ in dims)])
-                         if b else slice(None) for d, b in enumerate(dims))
+        for i in range(data.maxsize(0)):
+            inds = tuple(slice(0, mask[i].sum(d, keepdim=True)[
+                tuple(0 for _ in dims)])
+                if b else slice(None) for d, b in enumerate(dims))
             yield data[(slice(i, i + 1), *inds)]
 
     def __repr__(self):
@@ -57,9 +59,17 @@ class MaskedBatch(object):
     def size(self, dim=None):
         if dim is not None and dim < 0:
             dim = self.dim() + dim
-        if dim is None and any(self.dims) or dim is not None and self.dims[dim - 1]:
+        if dim is None and any(self.dims):
+            raise NotImplementedError("cannot get total size if any "
+                                      "dims are dynamic")
+        if dim is not None and self.dims[dim - 1]:
+            return MaskedBatch(self.mask.sum(dim))
             raise NotImplementedError("cannot get size in dynamic dimension")
         return self.data.size() if dim is None else self.data.size(dim)
+
+    @property
+    def shape(self):
+        return self.size()
 
     def new(self, *sizes):
         # if self.data.size(0) != 1:
