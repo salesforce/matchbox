@@ -1,6 +1,12 @@
 import torch
 from torch.nn import functional as F
-from torch.autograd import Variable
+
+if torch.__version__ < '0.4':
+    MAYBE_VARIABLE = TENSOR_TYPE = torch.autograd.Variable
+else:
+    def identity(x): return x
+    MAYBE_VARIABLE = identity
+    TENSOR_TYPE = torch.Tensor
 
 from . import MaskedBatch
 
@@ -11,7 +17,7 @@ def dropout(batch, p=0.5, training=False, inplace=False):
     return MaskedBatch(data, batch.mask, batch.dims)
 
 MaskedBatch.dropout = dropout
-Variable.dropout = dropout
+TENSOR_TYPE.dropout = dropout
 
 def linear(batch, weight, bias=None):
     if not isinstance(batch, MaskedBatch):
@@ -64,7 +70,7 @@ def softmax(batch, dim=-1):
     return MaskedBatch(data, mask, dims)
 
 MaskedBatch.softmax = softmax
-Variable.softmax = softmax
+TENSOR_TYPE.softmax = softmax
 
 def cross_entropy(input, target, weight=None, size_average=True,
                   ignore_index=-1, reduce=True):
@@ -309,7 +315,7 @@ def unbind(batch, dim):
                      for data in torch.unbind(batch.data, dim))
 
 MaskedBatch.unbind = unbind
-Variable.unbind = unbind
+TENSOR_TYPE.unbind = unbind
 
 def contiguous(batch):
     return MaskedBatch(
@@ -350,7 +356,7 @@ def transpose(batch, dim1, dim2):
     return MaskedBatch(data, mask, dims)
 
 MaskedBatch.transpose = transpose
-Variable.transpose = transpose
+TENSOR_TYPE.transpose = transpose
 
 def permute(batch, *permutation):
     data = batch.data.permute(*permutation)
@@ -383,7 +389,7 @@ def split_dim(batch, dim, split_by):
     return MaskedBatch(data, mask, dims)
 
 MaskedBatch.split_dim = split_dim
-Variable.split_dim = split_dim
+TENSOR_TYPE.split_dim = split_dim
 
 def join_dims(batch, dim1, dim2):
     if dim1 < 0:
@@ -415,7 +421,7 @@ def join_dims(batch, dim1, dim2):
     return MaskedBatch(data, mask, dims)
 
 MaskedBatch.join_dims = join_dims
-Variable.join_dims = join_dims
+TENSOR_TYPE.join_dims = join_dims
 
 def causal_mask(batch, in_dim, out_dim):
     '''if in_dim is indexed by i and out_dim by j, masks ret[i,j] where i > j'''
@@ -442,13 +448,13 @@ def causal_mask(batch, in_dim, out_dim):
     return MaskedBatch(batch.data, mask, dims)
 
 MaskedBatch.causal_mask = causal_mask
-Variable.causal_mask = causal_mask
+TENSOR_TYPE.causal_mask = causal_mask
 
 def maxsize(batch, dim=None):
     return batch.data.size() if dim is None else batch.data.size(dim)
 
 MaskedBatch.maxsize = maxsize
-Variable.maxsize = maxsize
+TENSOR_TYPE.maxsize = maxsize
 
 def _synchronize(batch):
     if not isinstance(batch, MaskedBatch):
@@ -459,7 +465,7 @@ def _synchronize(batch):
     return MaskedBatch(batch.data, mask, batch.dims)
 
 MaskedBatch._synchronize = _synchronize
-Variable._synchronize = _synchronize
+TENSOR_TYPE._synchronize = _synchronize
 
 def _update(batch, new, update_mask=None):
     if not isinstance(batch, MaskedBatch) and not isinstance(new, MaskedBatch):
@@ -473,7 +479,7 @@ def _update(batch, new, update_mask=None):
     return MaskedBatch(data, update_mask.type_as(data), new.dims)
 
 MaskedBatch._update = _update
-Variable._update = _update
+TENSOR_TYPE._update = _update
 
 # def _for(closure, iterator):
 #     for i in iterator:
@@ -486,12 +492,12 @@ def _inject_arith(original, replacement):
         return original(self, other)
     return inner
 
-Variable.__add__ = _inject_arith(Variable.__add__, lambda a, b: b + a)
-Variable.__sub__ = _inject_arith(Variable.__sub__, lambda a, b: -b + a)
-Variable.__mul__ = _inject_arith(Variable.__mul__, lambda a, b: b * a)
+TENSOR_TYPE.__add__ = _inject_arith(TENSOR_TYPE.__add__, lambda a, b: b + a)
+TENSOR_TYPE.__sub__ = _inject_arith(TENSOR_TYPE.__sub__, lambda a, b: -b + a)
+TENSOR_TYPE.__mul__ = _inject_arith(TENSOR_TYPE.__mul__, lambda a, b: b * a)
 # TODO
-# Variable.__matmul__ = _inject_arith(Variable.__add__, lambda a, b:)
-# Variable.__truediv__ = _inject_arith(Variable.__add__, lambda a, b:)
+# TENSOR_TYPE.__matmul__ = _inject_arith(TENSOR_TYPE.__matmul__, lambda a, b:)
+# TENSOR_TYPE.__truediv__ = _inject_arith(TENSOR_TYPE.__truediv__, lambda a, b:)
 
 import sys
 #torch.nn.functional = sys.modules[__name__] # monkeys in the bamboo tree

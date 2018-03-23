@@ -1,12 +1,15 @@
 import torch
 
+TENSOR_TYPE = (torch.autograd.Variable if torch.__version__ < '0.4'
+               else torch.Tensor)
+
 class MaskedBatch(object):
 
     def __init__(self, data, mask, dims):
         if data.dim() != mask.dim() or mask.dim() != len(dims) + 1:
             raise ValueError("malformed MaskedBatch {} with:\n data: {}\n mask: {}".format(
                 repr(dims), repr(data), repr(mask)))
-        if isinstance(mask, torch.autograd.Variable) and mask.requires_grad:
+        if isinstance(mask, TENSOR_TYPE) and mask.requires_grad:
             raise ValueError("mask cannot require grad")
         self.data = data
         self.mask = mask
