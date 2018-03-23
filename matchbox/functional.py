@@ -133,10 +133,10 @@ def matmul(batch1, batch2):
 MaskedBatch.__matmul__ = matmul
 
 def _elementwise_unary(fn):
-    def inner(batch, **kwargs):
+    def inner(batch, *args, **kwargs):
         if not isinstance(batch, MaskedBatch):
-            return fn(batch, **kwargs)
-        data = fn(batch.data, **kwargs)
+            return fn(batch, *args, **kwargs)
+        data = fn(batch.data, *args, **kwargs)
         mask = batch.mask.type_as(data)
         dims = batch.dims
         return MaskedBatch(data, mask, dims)
@@ -154,6 +154,7 @@ MaskedBatch.long = _elementwise_unary(TENSOR_TYPE.long)
 
 MaskedBatch.floor = _elementwise_unary(TENSOR_TYPE.floor)
 MaskedBatch.ceil = _elementwise_unary(TENSOR_TYPE.ceil)
+MaskedBatch.clamp = _elementwise_unary(TENSOR_TYPE.clamp)
 
 def _elementwise_binary(fn):
     def inner(batch1, batch2, **kwargs):
