@@ -91,6 +91,7 @@ if torch.__version__ < '0.4':
     torch.autograd.Variable.new = _var_method('new')
 
     def _where(cond, x, y):
+        cond = cond.type_as(x)
         return x * cond + y * (1 - cond)
     torch.where = _where
 
