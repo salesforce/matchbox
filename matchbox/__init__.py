@@ -60,15 +60,15 @@ class MaskedBatch(object):
         return self.data.dim()
 
     def size(self, dim=None):
-        if dim is not None and dim < 0:
-            dim = self.dim() + dim
-        if dim is None and any(self.dims):
-            raise NotImplementedError("cannot get total size if any "
-                                      "dims are dynamic")
-        if dim is not None and self.dims[dim - 1]:
-            return MaskedBatch(self.mask.sum(dim))
-            raise NotImplementedError("cannot get size in dynamic dimension")
-        return self.data.size() if dim is None else self.data.size(dim)
+        if dim is None:
+            if any(self.dims):
+                raise ValueError("use size_as_tensor for dynamic dimensions")
+            return self.data.size()
+        if dim < 0:
+            dim += self.dim()
+        if dim == 0 or not self.dims[dim - 1]:
+            return self.data.size(dim)
+        raise ValueError("use size_as_tensor for dynamic dimensions")
 
     @property
     def shape(self):

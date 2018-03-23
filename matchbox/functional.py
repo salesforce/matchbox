@@ -459,6 +459,25 @@ def causal_mask(batch, in_dim, out_dim):
 MaskedBatch.causal_mask = causal_mask
 TENSOR_TYPE.causal_mask = causal_mask
 
+def size_as_tensor(batch, dim):
+    if not isinstance(batch, MaskedBatch):
+        return MAYBE_VARIABLE(torch.LongTensor([batch.size(dim)]))
+    if dim is None:
+        return tuple(batch.size(d) for d in range(len(batch.dims) + 1))
+    if dim < 0:
+        dim += batch.dim()
+    if dim == 0 or not batch.dims[dim - 1]:
+        return MAYBE_VARIABLE(torch.LongTensor([batch.data.size(dim)]))
+    if __builtins__['any'](batch.dims[:dim - 1] + batch.dims[dim:]):
+        raise NotImplementedError("cannot get size in any of two or "
+                                  "more dynamic dimensions")
+    data = batch.mask.sum(dim).view(-1)
+    mask = batch.mask.new(batch.mask.size(0)).fill_(1)
+    return MaskedBatch(data, mask, ())
+
+MaskedBatch.size_as_tensor = size_as_tensor
+TENSOR_TYPE.size_as_tensor = size_as_tensor
+
 def maxsize(batch, dim=None):
     return batch.data.size() if dim is None else batch.data.size(dim)
 
