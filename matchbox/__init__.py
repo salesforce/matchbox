@@ -75,9 +75,19 @@ class MaskedBatch(object):
         return self.size()
 
     def new(self, *sizes):
-        # if self.data.size(0) != 1:
-        #     raise NotImplementedError
         return self.data.new(*sizes)
+
+    def new_zeros(self, *sizes):
+        return self.data.new_zeros(*sizes)
+        # mask = batch.mask + (1 - batch.mask)
+        # return MaskedBatch()
+
+    def __bool__(self):
+        if self.data.nelement() > 1:
+            raise ValueError("bool value of MaskedBatch with more than one "
+                             "value is ambiguous; use .any() or .all() or wrap "
+                             "code containing control flow in @batch.")
+        return bool(self.data)
 
 from . import functional
 from . import data

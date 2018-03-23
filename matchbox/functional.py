@@ -146,6 +146,15 @@ MaskedBatch.relu = relu = _elementwise_unary(F.relu)
 MaskedBatch.tanh = tanh = _elementwise_unary(F.tanh)
 MaskedBatch.sigmoid = sigmoid = _elementwise_unary(F.sigmoid)
 
+MaskedBatch.float = _elementwise_unary(TENSOR_TYPE.float)
+MaskedBatch.double = _elementwise_unary(TENSOR_TYPE.double)
+MaskedBatch.byte = _elementwise_unary(TENSOR_TYPE.byte)
+MaskedBatch.int = _elementwise_unary(TENSOR_TYPE.int)
+MaskedBatch.long = _elementwise_unary(TENSOR_TYPE.long)
+
+MaskedBatch.floor = _elementwise_unary(TENSOR_TYPE.floor)
+MaskedBatch.ceil = _elementwise_unary(TENSOR_TYPE.ceil)
+
 def _elementwise_binary(fn):
     def inner(batch1, batch2, **kwargs):
         if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
