@@ -34,7 +34,7 @@ class LoopAccumulation(gast.NodeTransformer):
         if len(node.orelse) > 0:
             raise NotImplementedError("cannot process while-else")
         test = node.test
-        node.test = gast.Call(gast.Attribute(
+        node.test = gast.Call(gast.Attribute( # TODO any over dim 0
             test, gast.Name('any', gast.Load(), None), None), [], [])
         return self.visit_loop(node, test)
     def visit_FunctionDef(self, node):

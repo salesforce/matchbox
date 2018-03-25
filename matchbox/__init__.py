@@ -19,14 +19,14 @@ class MaskedBatch(object):
     def fromlist(cls, examples, dims):
         # TODO do some validation
         bs = len(examples)
-        sizes = [max(x.maxsize(d + 1) for x in examples)
+        sizes = [max(x.size(d + 1) for x in examples)
                  for d in range(len(dims))]
         data = examples[0].new(bs, *sizes).zero_()
         mask_sizes = [s if dims[d] else 1 for d, s in enumerate(sizes)]
         mask = examples[0].new(bs, *mask_sizes).zero_()
         mask.requires_grad = False
         for i, x in enumerate(examples):
-            inds = [slice(0, x.maxsize(d + 1)) if b else slice(None)
+            inds = [slice(0, x.size(d + 1)) if b else slice(None)
                     for d, b in enumerate(dims)]
             data[(slice(i, i + 1), *inds)] = x
             mask[(slice(i, i + 1), *inds)] = 1

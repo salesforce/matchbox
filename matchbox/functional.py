@@ -472,8 +472,8 @@ def size_as_tensor(batch, dim):
     if __builtins__['any'](batch.dims[:dim - 1] + batch.dims[dim:]):
         raise NotImplementedError("cannot get size in any of two or "
                                   "more dynamic dimensions")
-    data = batch.mask.sum(dim).view(-1)
-    mask = batch.mask.new(batch.mask.size(0)).fill_(1)
+    data = batch.mask.long().sum(dim).view(-1)
+    mask = data.new(batch.mask.size(0)).fill_(1)
     return MaskedBatch(data, mask, ())
 
 MaskedBatch.size_as_tensor = size_as_tensor
@@ -524,7 +524,7 @@ def _inject_arith(original, replacement):
 TENSOR_TYPE.__add__ = _inject_arith(TENSOR_TYPE.__add__, lambda a, b: b + a)
 TENSOR_TYPE.__sub__ = _inject_arith(TENSOR_TYPE.__sub__, lambda a, b: -b + a)
 TENSOR_TYPE.__mul__ = _inject_arith(TENSOR_TYPE.__mul__, lambda a, b: b * a)
-# TODO
+# TODO fix __sub__; it's ugly
 # TENSOR_TYPE.__matmul__ = _inject_arith(TENSOR_TYPE.__matmul__, lambda a, b:)
 # TENSOR_TYPE.__truediv__ = _inject_arith(TENSOR_TYPE.__truediv__, lambda a, b:)
 
