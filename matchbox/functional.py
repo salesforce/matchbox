@@ -142,10 +142,6 @@ def _elementwise_unary(fn):
         return MaskedBatch(data, mask, dims)
     return inner
 
-MaskedBatch.relu = relu = _elementwise_unary(F.relu)
-MaskedBatch.tanh = tanh = _elementwise_unary(F.tanh)
-MaskedBatch.sigmoid = sigmoid = _elementwise_unary(F.sigmoid)
-
 MaskedBatch.float = _elementwise_unary(TENSOR_TYPE.float)
 MaskedBatch.double = _elementwise_unary(TENSOR_TYPE.double)
 MaskedBatch.byte = _elementwise_unary(TENSOR_TYPE.byte)
@@ -155,6 +151,16 @@ MaskedBatch.long = _elementwise_unary(TENSOR_TYPE.long)
 MaskedBatch.floor = _elementwise_unary(TENSOR_TYPE.floor)
 MaskedBatch.ceil = _elementwise_unary(TENSOR_TYPE.ceil)
 MaskedBatch.clamp = _elementwise_unary(TENSOR_TYPE.clamp)
+
+MaskedBatch.log = log = _elementwise_unary(TENSOR_TYPE.log)
+MaskedBatch.sqrt = sqrt = _elementwise_unary(TENSOR_TYPE.sqrt)
+MaskedBatch.sin = sin = _elementwise_unary(TENSOR_TYPE.sin)
+MaskedBatch.cos = cos = _elementwise_unary(TENSOR_TYPE.cos)
+MaskedBatch.tan = tan = _elementwise_unary(TENSOR_TYPE.tan)
+
+MaskedBatch.relu = relu = _elementwise_unary(F.relu)
+MaskedBatch.tanh = tanh = _elementwise_unary(F.tanh)
+MaskedBatch.sigmoid = sigmoid = _elementwise_unary(F.sigmoid)
 
 def _elementwise_binary(fn):
     def inner(batch1, batch2, **kwargs):
@@ -171,17 +177,22 @@ def _elementwise_binary(fn):
         return MaskedBatch(data, mask, dims)
     return inner
 
-MaskedBatch.__add__ = _elementwise_binary(torch.add)
-MaskedBatch.__sub__ = _elementwise_binary(lambda a, b: a - b)
-MaskedBatch.__mul__ = _elementwise_binary(torch.mul)
-MaskedBatch.__truediv__ = _elementwise_binary(torch.div)
+MaskedBatch.__neg__ = _elementwise_binary(TENSOR_TYPE.__neg__)
+MaskedBatch.__add__ = _elementwise_binary(TENSOR_TYPE.__add__)
+MaskedBatch.__sub__ = _elementwise_binary(TENSOR_TYPE.__sub__)
+MaskedBatch.__mul__ = _elementwise_binary(TENSOR_TYPE.__mul__)
+MaskedBatch.__truediv__ = _elementwise_binary(TENSOR_TYPE.__truediv__)
+MaskedBatch.__radd__ = _elementwise_binary(TENSOR_TYPE.__radd__)
+MaskedBatch.__rsub__ = _elementwise_binary(TENSOR_TYPE.__rsub__)
+MaskedBatch.__rmul__ = _elementwise_binary(TENSOR_TYPE.__rmul__)
+MaskedBatch.__rtruediv__ = _elementwise_binary(TENSOR_TYPE.__rtruediv__)
 
-MaskedBatch.__lt__ = _elementwise_binary(torch.lt)
-MaskedBatch.__le__ = _elementwise_binary(torch.le)
-MaskedBatch.__eq__ = _elementwise_binary(torch.eq)
-MaskedBatch.__ne__ = _elementwise_binary(torch.ne)
-MaskedBatch.__gt__ = _elementwise_binary(torch.gt)
-MaskedBatch.__ge__ = _elementwise_binary(torch.ge)
+MaskedBatch.__lt__ = _elementwise_binary(TENSOR_TYPE.__lt__)
+MaskedBatch.__le__ = _elementwise_binary(TENSOR_TYPE.__le__)
+MaskedBatch.__eq__ = _elementwise_binary(TENSOR_TYPE.__eq__)
+MaskedBatch.__ne__ = _elementwise_binary(TENSOR_TYPE.__ne__)
+MaskedBatch.__gt__ = _elementwise_binary(TENSOR_TYPE.__gt__)
+MaskedBatch.__ge__ = _elementwise_binary(TENSOR_TYPE.__ge__)
 
 def _reduce(fn, zero_preserving=False):
     def inner(batch, dim=None, keepdim=False):
