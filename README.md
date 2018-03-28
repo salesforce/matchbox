@@ -21,6 +21,8 @@ There is also a plugin for [torchtext](https://github.com/pytorch/text) and a
 wrapper for testing that Matchbox results are numerically equivalent to a loop
 over unbatched examples. See the `examples` and `test` directories for details.
 
+## Installation and requirements
+
 Matchbox is in early-release alpha. Use `python setup.py install` to install.
 Please file or upvote issues to request new operation implementations, or feel
 free to post one as a pull request. If Matchbox throws a `NotImplementedError`,
@@ -30,15 +32,18 @@ isn't yet.
 Matchbox is developed on Python 3.6 and PyTorch master (i.e., what will soon
 be released as version 0.4). It contains compatibility code that is intended to
 support PyTorch 0.3, but not all features will work. Matchbox also requires
-`gast` and `astor` and contains additional Python source-wrangling code
-modified from Patrick Maupin and Berker Peksag's
-[astor](https://github.com/berkerpeksag/astor) as well as
-[Tangent](https://github.com/google/tangent), a source-to-source
+`gast` and `astor`. Python 2 support is not an immediate priority but we would
+welcome a PR.
+
+## Credit
+Matchbox contains Python source-wrangling code modified from Patrick Maupin
+and Berker Peksag's
+[AST observe-rewrite](https://github.com/berkerpeksag/astor) as well as
+Google Brain's [Tangent](https://github.com/google/tangent), a source-to-source
 automatic differentiation package developed by Alex Wiltschko, Bart van
-Merrienboer and Dan Moldovan at Google Brain. The modified Tangent code is
-licensed under Apache 2 while the rest of the codebase is licensed under
-three-clause BSD; see `LICENSE.BSD-3.txt` and `LICENSE.Apache-2.txt`.
-Python 2 support is not an immediate priority but we would welcome a PR.
+Merrienboer and Dan Moldovan. The modified Tangent code is licensed under
+Apache 2 while the rest of the codebase is licensed under three-clause BSD;
+see `LICENSE.BSD-3.txt` and `LICENSE.Apache-2.txt`.
 
 ## Limitations
 Matchbox only works on code that uses native PyTorch operators. In particular,
