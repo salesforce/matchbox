@@ -7,7 +7,7 @@ from .tensor_math import matmul
 from .indexing import getitem
 from .tensor_shape import split, chunk, cat, stack, unbind, contiguous, view, transpose, permute, split_dim, join_dims, size_as_tensor, maxsize
 from .special import causal_mask
-from .constructors import new_zeros
+import matchbox.functional.constructors
 
 import sys
 

@@ -111,7 +111,7 @@ class AccumBiRNNClass(nn.Module):
         self.bwd = nn.RNNCell(size, size)
     @batch
     def forward(self, x):
-        h = h0 = x.new(x.size(0), x.size(-1)).zero_()
+        h = h0 = x.batch_zeros(x.size(-1))
         fwd, bwd = [], []
         for xt in x.unbind(1):
             h = self.fwd(xt, h)
