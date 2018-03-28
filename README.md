@@ -40,21 +40,26 @@ semantics.
 ### Standard
 The `dims` attribute is a `tuple` with a `bool` for each non-batch dimension,
 representing whether that dimension is static (`False`) or dynamic (`True`).
+
 The `data` attribute is a `Tensor` whose size is the batch size in the batch
 dimension, the size of all examples in static dimensions, and at least as large
 as the largest example in the batch in dynamic dimensions.
+
 The `mask` attribute is a `Tensor` whose size is the batch size in the batch
 dimension, one in static dimensions, and at least as large as the largest
 example in the batch in dynamic dimensions. Each entry in the mask corresponds
 to one or more entries in the data array (singleton, i.e., static, dimensions
 are broadcasted), with a one in the mask denoting that the corresponding data
 entries represent valid, meaningful data and a zero denoting that they do not.
-Data values corresponding to zeros in the mask are required to be zero, as some
-operations take advantage of this fact for efficiency purposes.
+
+Data values corresponding to zeros in the mask are not required to be zero,
+and operations should propagate masked data if doing so would not affect
+non-masked parts of the output. Operations for which this is not the case
+should first multiply their input data by the corresponding masks.
 ### SIMT
 A one in the mask denotes that the corresponding data entries represent
 currently active data. A zero denotes that the corresponding data entries
-represent "dormant" data, which may be valid at a "previous" index along
-an external dimension that is being iterated over or in another branch of
-a conditional. Currently, no dimensions in a SIMT batch may be dynamic, but
-support for this case will be added.
+represent "dormant" data, which may be valid at a previous step of a loop
+(e.g., at a previous index along an external dimension that is being iterated
+over) or in another branch of a conditional. Currently, no dimensions in a
+SIMT batch may be dynamic, but support for this case will be added.
