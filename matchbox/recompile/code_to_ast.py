@@ -1,3 +1,6 @@
+# This code is MODIFIED from the version in Astor (github.com/berkerpeksag/astor)
+# found at https://github.com/berkerpeksag/astor/blob/master/astor/file_util.py
+#
 # Part of the astor library for Python AST manipulation.
 # License: 3-clause BSD
 # Copyright (c) 2012-2015 Patrick Maupin

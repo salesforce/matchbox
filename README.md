@@ -30,8 +30,14 @@ isn't yet.
 Matchbox is developed on Python 3.6 and PyTorch master (i.e., what will soon
 be released as version 0.4). It contains compatibility code that is intended to
 support PyTorch 0.3, but not all features will work. Matchbox also requires
-`gast` and `astor` and contains additional Python source-wrangling code from
-[Tangent](https://github.com/google/tangent), used under an Apache 2 license.
+`gast` and `astor` and contains additional Python source-wrangling code
+modified from Patrick Maupin and Berker Peksag's
+[astor](https://github.com/berkerpeksag/astor) as well as
+[Tangent](https://github.com/google/tangent), a source-to-source
+automatic differentiation package developed by Alex Wiltschko, Bart van
+Merrienboer and Dan Moldovan at Google Brain. The modified Tangent code is
+licensed under Apache 2 while the rest of the codebase is licensed under
+three-clause BSD; see `LICENSE.BSD-3.txt` and `LICENSE.Apache-2.txt`.
 Python 2 support is not an immediate priority but we would welcome a PR.
 
 ## Limitations

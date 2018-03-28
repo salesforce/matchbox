@@ -1,4 +1,6 @@
-# From Tangent (github.com/google/tangent)
+# This code is MODIFIED from the version in Tangent (github.com/google/tangent)
+# found at https://github.com/google/tangent/blob/master/tangent/compile.py
+#
 # Copyright 2017 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
