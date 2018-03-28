@@ -1,5 +1,4 @@
 import torch
-from torch.nn import functional as F
 
 from matchbox import MaskedBatch
 from matchbox.compat import MAYBE_VARIABLE, TENSOR_TYPE
@@ -34,7 +33,7 @@ TENSOR_TYPE.causal_mask = causal_mask
 def _synchronize(batch):
     if not isinstance(batch, MaskedBatch):
         return batch
-    if __builtins__['any'](batch.dims):
+    if any(batch.dims):
         raise ValueError("cannot synchronize batch with dynamic dimensions")
     mask = batch.mask + (1 - batch.mask)
     return MaskedBatch(batch.data, mask, batch.dims)

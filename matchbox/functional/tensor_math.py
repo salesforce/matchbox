@@ -1,12 +1,11 @@
 import torch
-from torch.nn import functional as F
 
 from matchbox import MaskedBatch
 from matchbox.compat import MAYBE_VARIABLE, TENSOR_TYPE
 
 def matmul(batch1, batch2):
     if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
-        return F.matmul(batch1, batch2)
+        return batch1 @ batch2
     if isinstance(batch1, MaskedBatch) and isinstance(batch2, MaskedBatch):
         dims1 = len(batch1.dims)
         dims2 = len(batch2.dims)

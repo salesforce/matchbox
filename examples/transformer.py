@@ -231,7 +231,9 @@ if __name__ == '__main__':
     train_iter = data.BucketIterator(
         train, batch_size=32, device=0 if torch.cuda.is_available() else -1)
     args = argparse.Namespace()
-    args.__dict__.update(d_model=8 if small else 512, d_hidden=1 if small else 2048, n_heads=8, drop_ratio=0,
+    args.__dict__.update(d_model=8 if small else 512,
+                         d_hidden=1 if small else 2048,
+                         n_heads=8, drop_ratio=0,
                          n_layers=6, length_ratio=1.5)
     model = Transformer(TEXT, TEXT, args)
     if torch.cuda.is_available(): model.cuda()

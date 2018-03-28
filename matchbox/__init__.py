@@ -1,13 +1,13 @@
 import torch
 
-TENSOR_TYPE = (torch.autograd.Variable if torch.__version__ < '0.4'
-               else torch.Tensor)
+from .compat import TENSOR_TYPE
 
 class MaskedBatch(object):
 
     def __init__(self, data, mask, dims):
         if data.dim() != mask.dim() or mask.dim() != len(dims) + 1:
-            raise ValueError("malformed MaskedBatch {} with:\n data: {}\n mask: {}".format(
+            raise ValueError("malformed MaskedBatch {} with:\n data: "
+                             " {}\n mask: {}".format(
                 repr(dims), repr(data), repr(mask)))
         if isinstance(mask, TENSOR_TYPE) and mask.requires_grad:
             raise ValueError("mask cannot require grad")
@@ -85,34 +85,9 @@ class MaskedBatch(object):
         return bool(self.data)
 
 from . import functional
-from . import data
-from . import recompile
-from . import macro
 from .macro import batch
 
-if torch.__version__ < '0.4':
-    def _var_method(method_name):
-        def inner(self, *args, **kwargs):
-            t = getattr(self.data, method_name)(*args, **kwargs)
-            return torch.autograd.Variable(t)
-        return inner
-    torch.autograd.Variable.new = _var_method('new')
-
-    def _where(cond, x, y):
-        cond = cond.type_as(x)
-        return x * cond + y * (1 - cond)
-    torch.where = _where
-
-    _old_arange = torch.arange
-    def _new_arange(*args, out=None):
-        if isinstance(out, torch.autograd.Variable):
-            torch.arange(*args, out=out.data)
-            return out
-        return _old_arange(*args, out=out)
-    torch.arange = _new_arange
-
-    def embed_forward(self, input):
-        return functional.embedding(
-            input, self.weight, self.padding_idx, self.max_norm,
-            self.norm_type, self.scale_grad_by_freq, self.sparse)
-    torch.nn.Embedding.forward = embed_forward
+try:
+    from . import data
+except ImportError:
+    pass

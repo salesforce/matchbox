@@ -1,5 +1,4 @@
 import torch
-from torch.nn import functional as F
 
 from matchbox import MaskedBatch
 from matchbox.compat import MAYBE_VARIABLE, TENSOR_TYPE

@@ -1,5 +1,4 @@
 import torch
-from torch.nn import functional as F
 
 from matchbox import MaskedBatch
 from matchbox.compat import MAYBE_VARIABLE, TENSOR_TYPE
@@ -7,8 +6,7 @@ from matchbox.compat import MAYBE_VARIABLE, TENSOR_TYPE
 def _inject_new(original):
     def inner(self, *sizes):
         source = self.data if isinstance(self, MaskedBatch) else self
-        if not __builtins__['any'](isinstance(size, MaskedBatch)
-                                   for size in sizes):
+        if not any(isinstance(size, MaskedBatch) for size in sizes):
             return original(source, *(int(size) for size in sizes))
         if isinstance(sizes[0], MaskedBatch):
             raise ValueError("batch size dimension must be static")

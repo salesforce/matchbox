@@ -1,5 +1,4 @@
 import torch
-from torch.nn import functional as F
 
 from matchbox import MaskedBatch
 from matchbox.compat import MAYBE_VARIABLE, TENSOR_TYPE
@@ -193,7 +192,7 @@ def size_as_tensor(batch, dim):
         dim += batch.dim()
     if dim == 0 or not batch.dims[dim - 1]:
         return MAYBE_VARIABLE(torch.LongTensor([batch.data.size(dim)]))
-    if __builtins__['any'](batch.dims[:dim - 1] + batch.dims[dim:]):
+    if any(batch.dims[:dim - 1] + batch.dims[dim:]):
         raise NotImplementedError("cannot get size in any of two or "
                                   "more dynamic dimensions")
     data = batch.mask.long().sum(dim).view(-1)

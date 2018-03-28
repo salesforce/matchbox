@@ -10,9 +10,9 @@ class MaskedBatchField(data.Field):
         """Process a list of examples to create a matchbox.MaskedBatch.
 
         Args:
-            batch (list(object)): A list of object from a batch of examples.
+            batch (list(object)): A list of examples comprising a batch.
         Returns:
-            matchbox.MatchBox: Processed object given the input and custom
+            matchbox.MaskedBatch: Processed batch given the input and custom
                 postprocessing Pipeline.
         """
         batch = list(batch)
