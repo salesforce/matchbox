@@ -16,14 +16,14 @@ setup(
     long_description=long_description,
 
     # The project's main homepage.
-    url='https://github.com/jekbradbury/matchbox',
+    url='https://github.com/salesforce/matchbox',
 
     # Author details
     author='James Bradbury',
-    author_email='jekbradbury@gmail.com',
+    author_email='james.bradbury@salesforce.com',
 
     # Choose your license
-    license='MIT',
+    license='BSD-3',
 
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
     classifiers=[
@@ -31,13 +31,13 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
 
         # Indicate who your project is intended for
         'Intended Audience :: Developers',
 
         # Pick your license as you wish (should match "license" above)
-        'License :: OSI Approved :: MIT License',
+        'License :: OSI Approved :: BSD-3 License',
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
@@ -45,25 +45,25 @@ setup(
     ],
 
     # What does your project relate to?
-    keywords='text nlp',
+    keywords='pytorch deep_learning nlp batching autobatching',
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    packages=find_packages(exclude=['contrib', 'docs', 'tests']),
+    packages=find_packages(exclude=['test', 'examples']),
 
     # List run-time dependencies here.  These will be installed by pip when
     # your project is installed. For an analysis of "install_requires" vs pip's
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=[],
+    install_requires=['astor', 'gast'],
 
     # List additional groups of dependencies here (e.g. development
     # dependencies). You can install these using the following syntax,
     # for example:
     # $ pip install -e .[dev,test]
     extras_require={
-        'dev': ['check-manifest'],
-        'test': ['coverage'],
+        'data': ['torchtext'],
+        'test': ['pytest'],
     },
 
     # If there are data files included in your packages that need to be
