@@ -1,4 +1,4 @@
-# matchbox
+# Matchbox
 
 Matchbox enables deep learning researchers to write PyTorch code at the level
 of individual examples, then run it efficiently on minibatches. It does this
