@@ -10,7 +10,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='matchbox',
-    version='0.0.1',
+    version='0.1.0',
 
     description='Dispatch-driven autobatching for imperative deep learning',
     long_description=long_description,
@@ -31,7 +31,7 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 4 - Beta',
+        'Development Status :: 3 - Alpha',
 
         # Indicate who your project is intended for
         'Intended Audience :: Developers',
@@ -63,7 +63,7 @@ setup(
     # $ pip install -e .[dev,test]
     extras_require={
         'data': ['torchtext'],
-        'test': ['pytest'],
+        'test': ['pytest', 'numpy'],
     },
 
     # If there are data files included in your packages that need to be
