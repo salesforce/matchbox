@@ -6,6 +6,8 @@
 
 import torch
 
+from . import functional
+
 if torch.__version__ < '0.4':
     MAYBE_VARIABLE = TENSOR_TYPE = torch.autograd.Variable
 
