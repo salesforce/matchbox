@@ -14,7 +14,15 @@ if torch.__version__ < '0.4':
             t = getattr(self.data, method_name)(*args, **kwargs)
             return torch.autograd.Variable(t)
         return inner
-    torch.autograd.Variable.new = _var_method('new')
+    TENSOR_TYPE.new_empty = TENSOR_TYPE.new = _var_method('new')
+
+    def _new_zeros(self, *sizes):
+        return self.new(*sizes).zero_()
+    TENSOR_TYPE.new_zeros = _new_zeros
+
+    def _new_ones(self, *sizes):
+        return self.new(*sizes).fill_(1)
+    TENSOR_TYPE.new_ones = _new_ones
 
     def _where(cond, x, y):
         cond = cond.type_as(x)
@@ -28,12 +36,6 @@ if torch.__version__ < '0.4':
             return out
         return _old_arange(*args, out=out)
     torch.arange = _new_arange
-
-    def embed_forward(self, input):
-        return functional.embedding(
-            input, self.weight, self.padding_idx, self.max_norm,
-            self.norm_type, self.scale_grad_by_freq, self.sparse)
-    torch.nn.Embedding.forward = embed_forward
 
 else:
     def identity(x): return x

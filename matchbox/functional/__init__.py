@@ -33,3 +33,10 @@ torch.nn.modules.sparse.F = sys.modules[__name__]
 torch.nn.modules.linear.F = sys.modules[__name__]
 torch.nn.modules.dropout.F = sys.modules[__name__]
 torch.nn._functions.rnn.F = sys.modules[__name__]
+
+if torch.__version__ < '0.4':
+    def embed_forward(self, input):
+        return embedding(
+            input, self.weight, self.padding_idx, self.max_norm,
+            self.norm_type, self.scale_grad_by_freq, self.sparse)
+    torch.nn.Embedding.forward = embed_forward
