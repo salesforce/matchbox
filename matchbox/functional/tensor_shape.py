@@ -96,9 +96,9 @@ def view(batch, *sizes):
     sizes = (bs,) + sizes[1:]
     data = batch.data.view(*sizes) # TODO can throw
     mask_sizes = (bs,) + tuple(batch.data.size(i) if sizes[i] == -1 else 1
-                               for i in range(1, len(args)))
+                               for i in range(1, len(sizes)))
     mask = batch.mask.view(*mask_sizes) # TODO can this throw if data doesn't?
-    dims = tuple(sizes[i] == -1 for i in range(1, len(args)))
+    dims = tuple(sizes[i] == -1 for i in range(1, len(sizes)))
     return MaskedBatch(data, mask, dims)
 
 MaskedBatch.view = view

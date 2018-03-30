@@ -7,6 +7,7 @@
 import torch
 from torch.autograd import Variable
 from torchtext import data
+import six
 
 from . import MaskedBatch
 

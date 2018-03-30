@@ -68,7 +68,7 @@ setup(
     # for example:
     # $ pip install -e .[dev,test]
     extras_require={
-        'data': ['torchtext'],
+        'data': ['torchtext', 'six'],
         'test': ['pytest', 'numpy'],
     },
 
