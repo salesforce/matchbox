@@ -45,8 +45,14 @@ class LoopAccumulation(gast.NodeTransformer):
         return self.visit_loop(node, test)
     def visit_FunctionDef(self, node):
         self.generic_visit(node)
+        def is_batch_decorator(d):
+            if isinstance(d, gast.Name):
+                return d.id == 'batch'
+            elif isinstance(d, gast.Attribute):
+                return is_batch_decorator(d.attr)
+            return False
         node.decorator_list = [d for d in node.decorator_list
-                               if d.id != 'batch']
+                               if not is_batch_decorator(d)]
         return node
     def visit_loop(self, node, update_mask=gast.NameConstant(value=None)):
         node = FuseAttributes().visit(node)
