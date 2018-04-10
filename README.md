@@ -31,7 +31,7 @@ isn't yet.
 Matchbox is developed on Python 3.6 and PyTorch master (i.e., what will soon
 be released as version 0.4). It contains compatibility code that is intended to
 support PyTorch 0.3, but not all features will work. Matchbox also requires
-`gast` and `astor`. Python 2 support is not an immediate priority but we would
+`gast`, `astor` and `six`. Python 2 support is not an immediate priority but we would
 welcome a PR.
 
 ## Getting started
