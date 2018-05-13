@@ -59,7 +59,7 @@ class RNN(nn.Module):
     def forward(self, x):
         h = x.new_zeros(x.size(0), x.size(-1))
         for xt in x.unbind(1):
-            h = self.fwd(xt, h)
+            h = self.cell(xt, h)
         return h
 ```
 

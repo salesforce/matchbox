@@ -133,3 +133,17 @@ class AccumBiRNNClass(nn.Module):
 def test_accum_birnn_class():
     mb_test(AccumBiRNNClass(1),
             (4, (True, 3), (False, 1)))
+
+def test_readme():
+    class RNN(nn.Module):
+        def __init__(self, size):
+            super().__init__()
+            self.cell = nn.RNNCell(size, size)
+        @matchbox.batch
+        def forward(self, x):
+            h = x.new_zeros(x.size(0), x.size(-1))
+            for xt in x.unbind(1):
+                h = self.cell(xt, h)
+            return h
+    mb_test(RNN(1),
+            (4, (True, 3), (False, 1)))

@@ -50,7 +50,7 @@ class LoopAccumulation(gast.NodeTransformer):
                 return d.id == 'batch'
             elif isinstance(d, gast.Attribute):
                 return is_batch_decorator(d.attr)
-            return False
+            return d == 'batch'
         node.decorator_list = [d for d in node.decorator_list
                                if not is_batch_decorator(d)]
         return node
