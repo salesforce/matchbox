@@ -28,11 +28,10 @@ free to post one as a pull request. If Matchbox throws a `NotImplementedError`,
 that means that a particular feature of an operation could be supported but
 isn't yet.
 
-Matchbox is developed on Python 3.6 and PyTorch master (i.e., what will soon
-be released as version 0.4). It contains compatibility code that is intended to
-support PyTorch 0.3, but not all features will work. Matchbox also requires
-`gast`, `astor` and `six`. Python 2 support is not an immediate priority but we would
-welcome a PR.
+Matchbox is developed on Python 3.6 and PyTorch 0.4. It contains compatibility
+code that is intended to support PyTorch 0.3, but not all features will work.
+Matchbox also requires `gast`, `astor`, and `six`. Python 2 support is not an
+immediate priority but we would welcome a PR.
 
 ## Getting started
 The first step to using Matchbox is to replace your import of
@@ -73,7 +72,7 @@ import torch
 from matchbox import MaskedBatch
 from random import randint
 b, t, c = 32, 10, 128
-model = RNN(t)
+model = RNN(c)
 x_unbatched = torch.rand(1, randint(1, t), c) # a single random example
 x_manual_batch = MaskedBatch.fromlist(
     [torch.rand(1, randint(1, t), c) for i in range(b)], # list of examples
