@@ -22,3 +22,23 @@ def while_loop(x):
 
 def test_while():
     mb_test(while_loop, (4, ()))
+
+@batch
+def if_else(x):
+    if x > 0:
+        x = x - 1
+    else:
+        pass
+    return x
+
+def test_if_else():
+    mb_test(if_else, (4, ()))
+
+@batch
+def if_noelse(x):
+    if x > 0:
+        x = x - 1
+    return x
+
+def test_if_noelse():
+    mb_test(if_noelse, (4, ()))

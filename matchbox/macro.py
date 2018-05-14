@@ -12,14 +12,17 @@ import gast
 from .recompile import compile_function, code_to_ast
 
 class FuseAttributes(gast.NodeTransformer):
+    '''Transform foo.bar to foo_DOT_bar'''
     def visit_Attribute(self, node):
         self.generic_visit(node)
         if not isinstance(node.value, gast.Name):
             return node
-        return gast.Name(node.value.id + '_DOT_' + node.attr,
+        attrname = node.attr if isinstance(node.attr, str) else node.attr.id
+        return gast.Name(node.value.id + '_DOT_' + attrname,
                          node.value.ctx, None)
 
 class SplitAttributes(gast.NodeTransformer):
+    '''Transform foo_DOT_bar to foo.bar'''
     def visit_Name(self, node):
         if '_DOT_' not in node.id:
             return node
@@ -28,10 +31,21 @@ class SplitAttributes(gast.NodeTransformer):
                               attr, node.ctx)
 
 class ExecutionMasking(gast.NodeTransformer):
-    def generic_visit(self, node):
-        super().generic_visit(node)
-        #print('generic:', astor.dump_tree(node))
-        return node
+    def __init__(self):
+        super().__init__()
+        self.execution_mask_stack = []
+
+    @property
+    def execution_mask(self):
+        def compose(masks):
+            if len(masks) == 0:
+                # return `None`
+                return gast.NameConstant(value=None)
+            if len(masks) == 1:
+                return masks[0]
+            # return masks[-1] * compose(masks[:-1])
+            return gast.BinOp(masks[-1], gast.Mult, compose(masks[:-1]))
+        return compose(self.execution_mask_stack)
 
     def visit_FunctionDef(self, node):
         self.generic_visit(node)
@@ -47,44 +61,61 @@ class ExecutionMasking(gast.NodeTransformer):
 
     def visit_For(self, node):
         self.generic_visit(node)
-        return self.visit_loop(node)
+        return self.synchronize_lcds(node)
+
+    def visit_If(self, node):
+        self.execution_mask_stack.append(node.test)
+        for child in node.body:
+            self.generic_visit(child)
+        self.execution_mask_stack.pop()
+        if len(node.orelse) > 0:
+            test_inverse = gast.BinOp(1, gast.Sub, node.test)
+            self.execution_mask_stack.append(test_inverse)
+            for child in node.orelse:
+                self.generic_visit(child)
+            self.execution_mask_stack.pop()
+        node.test = gast.Call(gast.Attribute( # TODO any over dim 0
+            node.test, gast.Name('any', gast.Load(), None), None), [], [])
+        #TODO move orelse into its own If so it can have test_inverse.any()
 
     def visit_While(self, node):
-        self.generic_visit(node)
         if len(node.orelse) > 0:
             raise NotImplementedError("cannot process while-else")
-        test = node.test
+        self.execution_mask_stack.append(node.test)
+        self.generic_visit(node)
+        self.execution_mask_stack.pop()
         node.test = gast.Call(gast.Attribute( # TODO any over dim 0
-            test, gast.Name('any', gast.Load(), None), None), [], [])
-        return self.visit_loop(node, test)
+            node.test, gast.Name('any', gast.Load(), None), None), [], [])
+        return self.synchronize_lcds(node)
 
-    def visit_loop(self, node, update_mask=gast.NameConstant(value=None)):
+    def visit_Assign(self, node):
+        if len(node.targets) > 1:
+            raise NotImplementedError("cannot process multiple assignment")
+        node.value = gast.Call(
+            gast.Attribute(
+                gast.Name(node.targets[0].id, gast.Load(), None),
+                gast.Name('_update', gast.Load(), None),
+                None),
+            [node.value, self.execution_mask], [])
+        return node
+
+    def synchronize_lcds(self, node):
         node = FuseAttributes().visit(node)
-        loads, stores = defaultdict(list), set()
+        loads, lcds = defaultdict(list), set()
         for child in node.body:
             for n in gast.walk(child):
                 if isinstance(n, gast.Name) and isinstance(n.ctx, gast.Load):
                     loads[n.id].append(n)
             if isinstance(child, gast.Assign):
-                if len(child.targets) > 1:
-                    raise NotImplementedError("cannot process LCD that is "
-                                              "part of multiple assignment")
                 name = child.targets[0].id
                 if name in loads:
-                    if name in stores:
+                    if name in lcds:
                         raise NotImplementedError("cannot process LCD "
                                                   "stored to twice")
-                    # $var = $expr -> $var = $var._update($expr)
-                    child.value = gast.Call(
-                        gast.Attribute(
-                            gast.Name(name, gast.Load(), None),
-                            gast.Name('_update', gast.Load(), None),
-                            None),
-                        [child.value, update_mask], [])
-                    stores.add(name)
+                    lcds.add(name)
         node = SplitAttributes().visit(node)
         synchronizes = []
-        for name in stores:
+        for name in lcds:
             synchronize = gast.Assign(
                 [gast.Name(name, gast.Store(), None)],
                 gast.Call(
