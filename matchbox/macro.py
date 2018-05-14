@@ -27,22 +27,12 @@ class SplitAttributes(gast.NodeTransformer):
         return gast.Attribute(gast.Name(value, node.ctx, None),
                               attr, node.ctx)
 
-class LoopAccumulation(gast.NodeTransformer):
+class ExecutionMasking(gast.NodeTransformer):
     def generic_visit(self, node):
         super().generic_visit(node)
         #print('generic:', astor.dump_tree(node))
         return node
-    def visit_For(self, node):
-        self.generic_visit(node)
-        return self.visit_loop(node)
-    def visit_While(self, node):
-        self.generic_visit(node)
-        if len(node.orelse) > 0:
-            raise NotImplementedError("cannot process while-else")
-        test = node.test
-        node.test = gast.Call(gast.Attribute( # TODO any over dim 0
-            test, gast.Name('any', gast.Load(), None), None), [], [])
-        return self.visit_loop(node, test)
+
     def visit_FunctionDef(self, node):
         self.generic_visit(node)
         def is_batch_decorator(d):
@@ -54,6 +44,20 @@ class LoopAccumulation(gast.NodeTransformer):
         node.decorator_list = [d for d in node.decorator_list
                                if not is_batch_decorator(d)]
         return node
+
+    def visit_For(self, node):
+        self.generic_visit(node)
+        return self.visit_loop(node)
+
+    def visit_While(self, node):
+        self.generic_visit(node)
+        if len(node.orelse) > 0:
+            raise NotImplementedError("cannot process while-else")
+        test = node.test
+        node.test = gast.Call(gast.Attribute( # TODO any over dim 0
+            test, gast.Name('any', gast.Load(), None), None), [], [])
+        return self.visit_loop(node, test)
+
     def visit_loop(self, node, update_mask=gast.NameConstant(value=None)):
         node = FuseAttributes().visit(node)
         loads, stores = defaultdict(list), set()
@@ -95,5 +99,5 @@ class LoopAccumulation(gast.NodeTransformer):
 
 def batch(fn):
     node = code_to_ast(fn)
-    node = LoopAccumulation().visit(node)
+    node = ExecutionMasking().visit(node)
     return compile_function(node, fn.__globals__)
