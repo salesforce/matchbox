@@ -97,3 +97,21 @@ try:
     from . import data
 except ImportError:
     pass
+
+# global mask stack for control flow; not thread-safe
+_EXECUTION_MASKS = [None]
+EXECUTION_MASK = None
+
+def push_execution_mask(mask):
+    global EXECUTION_MASK
+    if EXECUTION_MASK is not None:
+        EXECUTION_MASK = EXECUTION_MASK * mask
+    else:
+        EXECUTION_MASK = mask
+    _EXECUTION_MASKS.append(EXECUTION_MASK)
+    EXECUTION_MASK = mask
+
+def pop_execution_mask():
+    global EXECUTION_MASK
+    _EXECUTION_MASKS.pop()
+    EXECUTION_MASK = _EXECUTION_MASKS[-1]
