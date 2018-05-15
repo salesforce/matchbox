@@ -48,7 +48,8 @@ MaskedBatch._synchronize = _synchronize
 TENSOR_TYPE._synchronize = _synchronize
 
 def _update(batch, new, update_mask=None):
-    if not isinstance(batch, MaskedBatch) and not isinstance(new, MaskedBatch):
+    if not isinstance(new, MaskedBatch) and (
+            not isinstance(batch, MaskedBatch) or update_mask is None):
         return new
     update_mask = (new.mask.byte() if update_mask is None
                    else update_mask.data * update_mask.mask)
