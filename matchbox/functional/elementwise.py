@@ -72,6 +72,13 @@ MaskedBatch.__ne__ = _elementwise_binary(TENSOR_TYPE.__ne__)
 MaskedBatch.__gt__ = _elementwise_binary(TENSOR_TYPE.__gt__)
 MaskedBatch.__ge__ = _elementwise_binary(TENSOR_TYPE.__ge__)
 
+MaskedBatch.lt = _elementwise_binary(TENSOR_TYPE.lt)
+MaskedBatch.le = _elementwise_binary(TENSOR_TYPE.le)
+MaskedBatch.eq = _elementwise_binary(TENSOR_TYPE.eq)
+MaskedBatch.ne = _elementwise_binary(TENSOR_TYPE.ne)
+MaskedBatch.gt = _elementwise_binary(TENSOR_TYPE.gt)
+MaskedBatch.ge = _elementwise_binary(TENSOR_TYPE.ge)
+
 def _inject_arith(original, replacement):
     def inner(self, other):
         if isinstance(other, MaskedBatch):
