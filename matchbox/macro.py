@@ -11,6 +11,23 @@ import gast
 
 from .recompile import compile_function, code_to_ast
 
+def pushmask(mask_expr):
+    return gast.Expr(gast.Call(
+        gast.Attribute(gast.Name('matchbox', gast.Load(), None),
+                       gast.Name('push_execution_mask', gast.Load(), None),
+                       gast.Load()),
+        [mask_expr], []))
+
+popmask = gast.Expr(gast.Call(
+    gast.Attribute(gast.Name('matchbox', gast.Load(), None),
+                   gast.Name('pop_execution_mask', gast.Load(), None),
+                   gast.Load()),
+    [], []))
+
+def any_active(mask_expr):
+    return gast.Call(gast.Attribute( # TODO any over dim 0
+        mask_expr, gast.Name('any', gast.Load(), None), gast.Load()), [], [])
+
 class FuseAttributes(gast.NodeTransformer):
     '''Transform foo.bar to foo_DOT_bar'''
     def visit_Attribute(self, node):
@@ -33,22 +50,9 @@ class SplitAttributes(gast.NodeTransformer):
 class ExecutionMasking(gast.NodeTransformer):
     def __init__(self):
         super().__init__()
-        self.execution_mask_stack = []
-
-    @property
-    def execution_mask(self):
-        def compose(masks):
-            if len(masks) == 0:
-                # return `None`
-                return gast.NameConstant(value=None)
-            if len(masks) == 1:
-                return masks[0]
-            # return masks[-1] * compose(masks[:-1])
-            return gast.BinOp(masks[-1], gast.Mult, compose(masks[:-1]))
-        return compose(self.execution_mask_stack)
 
     def visit_FunctionDef(self, node):
-        self.generic_visit(node)
+        node = self.generic_visit(node)
         def is_batch_decorator(d):
             if isinstance(d, gast.Name):
                 return d.id == 'batch'
@@ -60,43 +64,82 @@ class ExecutionMasking(gast.NodeTransformer):
         return node
 
     def visit_For(self, node):
-        self.generic_visit(node)
+        node = self.generic_visit(node)
         return self.synchronize_lcds(node)
 
     def visit_If(self, node):
-        self.execution_mask_stack.append(node.test)
-        for child in node.body:
-            self.generic_visit(child)
-        self.execution_mask_stack.pop()
+        node = self.generic_visit(node)
+        node = self.add_mask(node, node.test)
+        nodes = [node]
         if len(node.orelse) > 0:
-            test_inverse = gast.BinOp(1, gast.Sub, node.test)
-            self.execution_mask_stack.append(test_inverse)
-            for child in node.orelse:
-                self.generic_visit(child)
-            self.execution_mask_stack.pop()
-        node.test = gast.Call(gast.Attribute( # TODO any over dim 0
-            node.test, gast.Name('any', gast.Load(), None), None), [], [])
-        #TODO move orelse into its own If so it can have test_inverse.any()
+            test_inverse = gast.Call(
+                gast.Attribute(
+                    node.test, gast.Name('eq', gast.Load(), None), gast.Load()),
+                [gast.Num(0)], [])
+            else_node = gast.If(any_active(test_inverse), node.orelse, [])
+            node.orelse = []
+            self.add_mask(else_node, test_inverse)
+            nodes.append(else_node)
+        node.test = any_active(node.test)
+        return nodes
 
     def visit_While(self, node):
         if len(node.orelse) > 0:
             raise NotImplementedError("cannot process while-else")
-        self.execution_mask_stack.append(node.test)
-        self.generic_visit(node)
-        self.execution_mask_stack.pop()
-        node.test = gast.Call(gast.Attribute( # TODO any over dim 0
-            node.test, gast.Name('any', gast.Load(), None), None), [], [])
-        return self.synchronize_lcds(node)
+        node = self.generic_visit(node)
+        node = self.add_mask(node, node.test)
+        node.test = any_active(node.test)
+        node = self.synchronize_lcds(node)
+        return node
 
     def visit_Assign(self, node):
         if len(node.targets) > 1:
             raise NotImplementedError("cannot process multiple assignment")
-        node.value = gast.Call(
-            gast.Attribute(
-                gast.Name(node.targets[0].id, gast.Load(), None),
-                gast.Name('_update', gast.Load(), None),
-                None),
-            [node.value, self.execution_mask], [])
+        if not isinstance(node.targets[0], gast.Name):
+            raise NotImplementedError("cannot process indexed assignment")
+        # $lhs = $lhs.update_($rhs, matchbox.EXECUTION_MASK) if (lhs in vars()
+        # or lhs in globals()) and isinstance($lhs, (matchbox.MaskedBatch,
+        # matchbox.TENSOR_TYPE)) else $rhs
+        node.value = gast.IfExp(
+            gast.BoolOp(gast.And(),
+                [gast.BoolOp(gast.Or(),
+                    [gast.Compare(gast.Str(node.targets[0].id), [gast.In()],
+                        [gast.Call(gast.Name('vars', gast.Load, None),
+                                   [], [])]),
+                     gast.Compare(gast.Str(node.targets[0].id), [gast.In()],
+                        [gast.Call(gast.Name('globals', gast.Load, None),
+                                   [], [])])]),
+                 # gast.Compare(
+                 #    gast.Attribute(
+                 #      gast.Name('matchbox', gast.Load(), None),
+                 #      gast.Name('EXECUTION_MASK', gast.Load(), None),
+                 #      gast.Load()),
+                 #    [gast.IsNot()],
+                 #    [gast.NameConstant(None)]),
+                 gast.Call(gast.Name('isinstance', gast.Load(), None),
+                           [node.targets[0], gast.Tuple(
+                            [gast.Attribute(
+                                gast.Name('matchbox', gast.Load(), None),
+                                gast.Name('MaskedBatch', gast.Load(), None),
+                                gast.Load()),
+                             gast.Attribute(
+                                gast.Name('matchbox', gast.Load(), None),
+                                gast.Name('TENSOR_TYPE', gast.Load(), None),
+                                gast.Load())], gast.Load())], [])]),
+            gast.Call(
+                gast.Attribute(
+                    gast.Name(node.targets[0].id, gast.Load(), None),
+                    gast.Name('_update', gast.Load(), None),
+                    gast.Load()),
+                [node.value, gast.Attribute(
+                  gast.Name('matchbox', gast.Load(), None),
+                  gast.Name('EXECUTION_MASK', gast.Load(), None),
+                  gast.Load())], []),
+            node.value)
+        return node
+
+    def add_mask(self, node, mask):
+        node.body = [pushmask(mask)] + node.body + [popmask]
         return node
 
     def synchronize_lcds(self, node):
