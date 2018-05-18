@@ -51,8 +51,8 @@ def _update(batch, new, update_mask=None):
     if not isinstance(new, MaskedBatch) and (
             not isinstance(batch, MaskedBatch) or update_mask is None):
         return new
-    update_mask = (new.mask.byte() if update_mask is None
-                   else update_mask.data * update_mask.mask)
+    update_mask = (new.mask.byte() if update_mask is None else
+                   (update_mask.data * update_mask.mask).expand_as(new.mask))
     if isinstance(batch, MaskedBatch):
         data = torch.where(update_mask, new.data, batch.data)
     else:
