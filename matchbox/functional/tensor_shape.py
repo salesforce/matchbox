@@ -132,6 +132,32 @@ def permute(batch, *permutation):
 
 MaskedBatch.permute = permute
 
+def squeeze(batch, dim):
+    if dim < 0:
+        dim += batch.dim()
+    data = batch.data.squeeze(dim)
+    mask = batch.mask.squeeze(dim)
+    dims = batch.dims[:dim - 1] + batch.dims[dim:]
+    return MaskedBatch(data, mask, dims)
+
+MaskedBatch.squeeze = squeeze
+
+def unsqueeze(batch, dim):
+    if dim < 0:
+        dim += batch.dim()
+    data = batch.data.unsqueeze(dim)
+    mask = batch.mask.unsqueeze(dim)
+    dims = batch.dims[:dim - 1] + (False,) + batch.dims[dim - 1:]
+    return MaskedBatch(data, mask, dims)
+
+MaskedBatch.unsqueeze = unsqueeze
+
+def expand(batch, *sizes):
+    data = batch.data.expand(*sizes)
+    return MaskedBatch(data, batch.mask, batch.dims)
+
+MaskedBatch.expand = expand
+
 def split_dim(batch, dim, split_by):
     if dim < 0:
         dim += batch.dim()
