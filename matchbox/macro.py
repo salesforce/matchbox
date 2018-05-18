@@ -95,40 +95,43 @@ class ExecutionMasking(gast.NodeTransformer):
     def visit_Assign(self, node):
         if len(node.targets) > 1:
             raise NotImplementedError("cannot process multiple assignment")
-        if not isinstance(node.targets[0], gast.Name):
-            raise NotImplementedError("cannot process indexed assignment")
+        lhs = node.targets[0]
+        lhs_var = lhs
+        if isinstance(lhs_var, gast.Subscript):
+            lhs_var = lhs_var.value
+        test = gast.Call(gast.Name('isinstance', gast.Load(), None),
+                  [lhs_var, gast.Tuple(
+                   [gast.Attribute(
+                       gast.Name('matchbox', gast.Load(), None),
+                       gast.Name('MaskedBatch', gast.Load(), None),
+                       gast.Load()),
+                    gast.Attribute(
+                       gast.Name('matchbox', gast.Load(), None),
+                       gast.Name('TENSOR_TYPE', gast.Load(), None),
+                       gast.Load())], gast.Load())], [])
+        if isinstance(lhs_var, gast.Attribute):
+            test = gast.BoolOp(gast.And(),
+                [gast.Call(gast.Name('hasattr', gast.Load(), None),
+                           [lhs_var.value, gast.Str(lhs_var.attr)], []),
+                 test])
+        else:
+            test = gast.BoolOp(gast.And(),
+                [gast.BoolOp(gast.Or(),
+                    [gast.Compare(gast.Str(lhs_var.id), [gast.In()],
+                        [gast.Call(gast.Name('vars', gast.Load, None),
+                                   [], [])]),
+                     gast.Compare(gast.Str(lhs_var.id), [gast.In()],
+                        [gast.Call(gast.Name('globals', gast.Load, None),
+                                   [], [])])]),
+                 test])
         # $lhs = $lhs.update_($rhs, matchbox.EXECUTION_MASK) if (lhs in vars()
         # or lhs in globals()) and isinstance($lhs, (matchbox.MaskedBatch,
         # matchbox.TENSOR_TYPE)) else $rhs
         node.value = gast.IfExp(
-            gast.BoolOp(gast.And(),
-                [gast.BoolOp(gast.Or(),
-                    [gast.Compare(gast.Str(node.targets[0].id), [gast.In()],
-                        [gast.Call(gast.Name('vars', gast.Load, None),
-                                   [], [])]),
-                     gast.Compare(gast.Str(node.targets[0].id), [gast.In()],
-                        [gast.Call(gast.Name('globals', gast.Load, None),
-                                   [], [])])]),
-                 # gast.Compare(
-                 #    gast.Attribute(
-                 #      gast.Name('matchbox', gast.Load(), None),
-                 #      gast.Name('EXECUTION_MASK', gast.Load(), None),
-                 #      gast.Load()),
-                 #    [gast.IsNot()],
-                 #    [gast.NameConstant(None)]),
-                 gast.Call(gast.Name('isinstance', gast.Load(), None),
-                           [node.targets[0], gast.Tuple(
-                            [gast.Attribute(
-                                gast.Name('matchbox', gast.Load(), None),
-                                gast.Name('MaskedBatch', gast.Load(), None),
-                                gast.Load()),
-                             gast.Attribute(
-                                gast.Name('matchbox', gast.Load(), None),
-                                gast.Name('TENSOR_TYPE', gast.Load(), None),
-                                gast.Load())], gast.Load())], [])]),
+            test,
             gast.Call(
                 gast.Attribute(
-                    gast.Name(node.targets[0].id, gast.Load(), None),
+                    lhs,
                     gast.Name('_update', gast.Load(), None),
                     gast.Load()),
                 [node.value, gast.Attribute(
