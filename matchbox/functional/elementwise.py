@@ -40,6 +40,8 @@ MaskedBatch.relu = relu = _elementwise_unary(F.relu)
 MaskedBatch.tanh = tanh = _elementwise_unary(F.tanh)
 MaskedBatch.sigmoid = sigmoid = _elementwise_unary(F.sigmoid)
 
+MaskedBatch.__neg__ = _elementwise_unary(TENSOR_TYPE.__neg__)
+
 def _elementwise_binary(fn):
     def inner(batch1, batch2, **kwargs):
         if not isinstance(batch1, MaskedBatch) and not isinstance(batch2, MaskedBatch):
@@ -55,7 +57,6 @@ def _elementwise_binary(fn):
         return MaskedBatch(data, mask, dims)
     return inner
 
-MaskedBatch.__neg__ = _elementwise_binary(TENSOR_TYPE.__neg__)
 MaskedBatch.__add__ = _elementwise_binary(TENSOR_TYPE.__add__)
 MaskedBatch.__sub__ = _elementwise_binary(TENSOR_TYPE.__sub__)
 MaskedBatch.__mul__ = _elementwise_binary(TENSOR_TYPE.__mul__)
