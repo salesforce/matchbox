@@ -83,6 +83,14 @@ class MaskedBatch(object):
     def new(self, *sizes):
         return self.data.new(*sizes)
 
+    def type(self, dtype=None, non_blocking=False, **kwargs):
+        if dtype:
+            data = self.data.type(dtype, non_blocking, **kwargs)
+            mask = self.mask.type(dtype, non_blocking, **kwargs)
+            return self.__class__(data, mask, self.dims)
+        else:
+            return self.data.type()
+
     def __bool__(self):
         if self.data.nelement() > 1:
             raise ValueError("bool value of MaskedBatch with more than one "
