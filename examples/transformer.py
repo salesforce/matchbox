@@ -11,6 +11,7 @@ from torchtext import data, datasets
 import matchbox
 from matchbox import functional as F
 from matchbox.data import MaskedBatchField
+from matchbox import BD
 
 import argparse
 import math
@@ -216,11 +217,11 @@ class Transformer(nn.Module):
         if unbatch:
             loss = 0
             for src, trg in zip(batch.src.examples(), batch.trg.examples()):
-                logits = self(src, trg[:, :-1])
-                loss += F.cross_entropy(logits, trg[:, 1:], reduce=reduce)
+                logits = self(src, trg[BD, :-1])
+                loss += F.cross_entropy(logits, trg[BD, 1:], reduce=reduce)
             return loss
-        logits = self(batch.src, batch.trg[:, :-1])
-        return F.cross_entropy(logits, batch.trg[:, 1:], reduce=reduce)
+        logits = self(batch.src, batch.trg[BD, :-1])
+        return F.cross_entropy(logits, batch.trg[BD, 1:], reduce=reduce)
 
 if __name__ == '__main__':
     import sys

@@ -8,6 +8,11 @@ import torch
 
 from .compat import TENSOR_TYPE
 
+# indexing sentinel for batch dimension
+# required because the semantics we want is equivalent to basic indexing
+# with : but advanced indexing with a range over the dimension.
+BD = ()
+
 class MaskedBatch(object):
 
     def __init__(self, data, mask, dims):

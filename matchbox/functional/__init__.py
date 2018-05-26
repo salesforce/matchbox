@@ -9,13 +9,13 @@ import torch
 from .nnet import dropout, linear, embedding, softmax, cross_entropy
 from .elementwise import log, sqrt, sin, cos, tan, relu, tanh, sigmoid
 from .tensor_math import matmul
-from .indexing import getitem
 from .tensor_shape import split, chunk, cat, stack, unbind
 from .tensor_shape import contiguous, view, transpose, permute
 from .tensor_shape import split_dim, join_dims, size_as_tensor, maxsize
 from .special import causal_mask
 from . import reduction
 from . import constructors
+from . import indexing
 
 import sys
 
